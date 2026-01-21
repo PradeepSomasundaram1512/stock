@@ -1,0 +1,142 @@
+RISK MANAGEMENT AND INVESTMENT GUIDELINES
+
+=== FUNDAMENTAL RISK PRINCIPLES ===
+
+This System Is Not Financial Advice:
+All analysis provided by this system is for educational and informational purposes only. The AI model generates opinions based on technical patterns and historical data, but cannot predict future price movements with certainty. Users must conduct their own research, understand their risk tolerance, and consult qualified financial advisors before making investment decisions.
+
+No Guarantees:
+Past performance does not guarantee future results. Technical patterns that worked historically may fail in the future. Market conditions constantly change. Black swan events can invalidate all technical analysis. Every investment carries risk of partial or total loss of capital.
+
+Market Unpredictability:
+Financial markets are influenced by countless factors including economic data, geopolitical events, company fundamentals, market sentiment, algorithmic trading, and random noise. Technical analysis provides only one lens and cannot account for all variables. Unexpected events can cause rapid price changes that violate all technical patterns.
+
+=== POSITION SIZING AND RISK MANAGEMENT ===
+
+Never Risk More Than You Can Afford to Lose:
+Only invest capital that you can afford to lose entirely without impacting your financial security, lifestyle, or ability to meet financial obligations. Never invest emergency funds, money needed for near-term expenses, or borrowed money.
+
+Position Sizing Rules:
+Conservative approach: Risk no more than 1-2% of total portfolio on any single position. Moderate approach: Risk 2-5% per position. Aggressive approach: Risk up to 5-10% (higher risk of significant losses). Diversify across multiple positions and sectors to reduce concentration risk.
+
+Stop Loss Discipline:
+Always use stop losses to limit downside risk. Typical stop loss levels: 5-10% below entry for moderate volatility stocks, 10-15% for high volatility stocks. Once set, respect stop losses and exit positions when triggered. Never average down on losing positions without clear technical confirmation of reversal.
+
+Take Profit Targets:
+Set realistic profit targets based on technical resistance levels. Consider taking partial profits as targets are reached. Avoid greed - a confirmed gain is better than an unrealized potential gain. Trail stop losses higher as position becomes profitable to protect gains.
+
+=== MARKET CONDITION CONSIDERATIONS ===
+
+High Volatility Periods:
+During high volatility (>3% daily ATR normalized), reduce position sizes significantly. Expect larger price swings and wider stop losses. Consider moving to cash or defensive positions. Technical patterns are less reliable in extreme volatility. News and events can override technical signals.
+
+Bear Markets:
+In confirmed bear markets (sustained downtrend in major indices), be extremely cautious with long positions. Short-term rallies (bear market rallies) are common but often fail. Consider inverse ETFs or cash positions. Shorten time horizons and take profits more quickly.
+
+Bull Markets:
+During sustained bull markets, trend-following strategies work well. Pullbacks to moving averages often provide buying opportunities. However, maintain discipline as bull markets eventually end. Watch for distribution patterns and weakening breadth.
+
+Low Liquidity Conditions:
+Small cap stocks and low volume periods present additional risks. Wider bid-ask spreads increase transaction costs. Difficulty exiting positions quickly in adverse conditions. Price gaps more likely. Require extra confirmation before entering.
+
+=== SECTOR AND CORRELATION RISKS ===
+
+Sector Concentration:
+Avoid overconcentration in single sectors. Different sectors perform differently in various economic conditions. Technology may lead in growth periods but suffer in downturns. Defensive sectors (utilities, consumer staples) often outperform in recessions. Diversify across at least 3-5 different sectors.
+
+Market Correlation:
+Individual stocks often move with broader market indices. Strong stock patterns can fail during market-wide corrections. Always check major index trends (S&P 500, Nasdaq) before taking positions. In high correlation environments, market direction matters more than individual stock technicals.
+
+Hedging Considerations:
+During uncertain periods, consider hedging strategies. Options can provide downside protection. Inverse ETFs can hedge long portfolios. Reduced position sizing is the simplest hedge. Cost of hedging must be balanced against potential protection.
+
+=== SPECIFIC SCENARIO RISKS ===
+
+Earnings Announcements:
+Avoid holding positions through earnings unless specifically trading earnings. Price can gap significantly on earnings surprises, violating stop losses. Implied volatility increases before earnings, affecting options. If holding through earnings, reduce position size significantly.
+
+Economic Data Releases:
+Major economic reports (jobs data, inflation, GDP, Fed decisions) can cause sharp market moves. Consider reducing exposure before major releases. Be prepared for increased volatility. Technical levels may be violated temporarily by news reactions.
+
+Geopolitical Events:
+Wars, political instability, trade disputes create market uncertainty. These events can override technical analysis. Reduce risk during heightened geopolitical tensions. Monitor global news and be prepared to exit positions quickly.
+
+Technical Breakdowns:
+When price violates key support levels, exit positions promptly. Failed breakouts often lead to sharp reversals. Respect technical signals even when fundamentals seem positive. Markets can remain irrational longer than you can remain solvent.
+
+=== TIME HORIZON CONSIDERATIONS ===
+
+Day Trading Risks:
+Day trading carries extreme risk and requires significant skill, time, and emotional discipline. Most day traders lose money. Transaction costs eat into profits. Requires full-time attention. Only for experienced traders with risk capital.
+
+Swing Trading (Days to Weeks):
+Moderate risk approach suitable for part-time traders. Still requires regular monitoring. Overnight and weekend risks from gap moves. Balance between day trading intensity and long-term investing patience.
+
+Position Trading (Weeks to Months):
+Lower stress approach focusing on major trend moves. Requires patience and ability to withstand normal pullbacks. Fewer transactions reduce costs. More time for due diligence. Better for most individual investors.
+
+Long-Term Investing (Years):
+Buy and hold approach focuses on fundamental value. Technical analysis used mainly for entry timing. Can ride through volatility. Compound returns over time. Suitable for retirement and long-term wealth building.
+
+=== PSYCHOLOGICAL RISK FACTORS ===
+
+Emotional Decision Making:
+Fear and greed are the biggest enemies of traders. Chasing moves (FOMO) leads to poor entries. Panic selling locks in losses at bottoms. Overconfidence after wins leads to excessive risk taking. Maintain disciplined, systematic approach.
+
+Confirmation Bias:
+Tendency to seek information confirming existing beliefs. Ignoring warning signals in favored stocks. Overweighting positive news, underweighting negative news. Actively seek contrary viewpoints and challenge your thesis.
+
+Overtrading:
+Trading too frequently reduces returns through costs and poor decision making. Not every market movement requires action. Sometimes best position is no position. Quality over quantity in trade selection.
+
+Revenge Trading:
+Trying to quickly recover losses by taking larger risks. Usually compounds losses. After significant loss, step back and reassess. Return to systematic approach with proper position sizing. Emotional trading leads to poor decisions.
+
+=== REGULATORY AND TAX CONSIDERATIONS ===
+
+Tax Implications:
+Short-term capital gains (positions held less than 1 year) are taxed as ordinary income in most jurisdictions. Long-term gains often have favorable tax treatment. Frequent trading can create significant tax burdens. Consult tax professionals for your specific situation.
+
+Regulatory Requirements:
+Pattern day trader rules require $25,000 minimum account balance in the US. Different jurisdictions have different rules. Understand regulations in your country. Keep accurate records of all transactions.
+
+Broker Reliability:
+Use reputable, regulated brokers. Ensure adequate insurance protection on accounts. Understand fee structures and execution quality. Have backup plans if primary broker has technical issues.
+
+=== RED FLAGS AND WARNING SIGNS ===
+
+When to Avoid Trading:
+- You are emotionally stressed or distracted
+- You feel pressured to make money quickly
+- You are chasing losses
+- You don't understand the security or strategy
+- You are using money you cannot afford to lose
+- Technical signals are unclear or conflicting
+- Market volatility is extreme
+- You haven't done proper research
+
+When to Exit Positions Immediately:
+- Stop loss is hit
+- Thesis is proven wrong (technical breakdown)
+- Better opportunities emerge requiring capital
+- Risk conditions have deteriorated significantly
+- You can no longer monitor the position
+- Unexpected negative news/events
+- Position size has grown too large through appreciation
+
+=== FINAL RISK REMINDERS ===
+
+You Are Responsible:
+No AI system, advisor, or analyst is responsible for your trading decisions. You alone bear the consequences of your investment choices. Never blame others for your losses. Take ownership of both wins and losses.
+
+Continuous Learning:
+Markets evolve and require continuous learning. Study your winners and losers. Keep a trading journal. Learn from mistakes. Stay humble - the market will humble even the best traders eventually.
+
+Diversification Beyond Stocks:
+Stocks should be part of a broader financial plan. Maintain emergency fund in cash. Consider bonds, real estate, commodities. Don't put all assets in equities. Balance risk across asset classes.
+
+Professional Advice:
+This AI system cannot replace professional financial advice. Complex situations (retirement planning, estate planning, tax optimization) require human experts. Build relationships with qualified financial planners, tax advisors, and attorneys.
+
+Health and Life Balance:
+Never let trading/investing negatively impact your health, relationships, or mental well-being. If you find yourself obsessing over positions, losing sleep, or experiencing significant stress, reduce or eliminate trading activity. Financial success is meaningless without health and happiness.

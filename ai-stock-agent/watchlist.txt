@@ -1,0 +1,19 @@
+# Day Trading Watchlist
+# Add one ticker per line
+
+# Tech Giants
+AAPL
+MSFT
+GOOGL
+NVDA
+TSLA
+AMD
+
+# ETFs
+SPY
+QQQ
+IWM
+
+# High Volume Stocks
+BAC
+F

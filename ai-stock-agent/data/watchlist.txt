@@ -1,0 +1,27 @@
+# Stock Watchlist for AI Stock Agent
+# One ticker per line
+# Lines starting with # are comments
+
+# Technology
+AAPL
+MSFT
+GOOGL
+NVDA
+META
+
+# E-Commerce & Streaming
+AMZN
+NFLX
+
+# Electric Vehicles
+TSLA
+
+# Finance
+JPM
+BAC
+
+# Healthcare
+JNJ
+PFE
+
+# Add more tickers as needed

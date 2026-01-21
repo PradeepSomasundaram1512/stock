@@ -1,0 +1,140 @@
+STOCK MARKET PATTERNS AND TECHNICAL ANALYSIS KNOWLEDGE BASE
+
+=== TREND PATTERNS ===
+
+Uptrend Pattern:
+An uptrend is characterized by higher highs and higher lows. Price consistently moves above key moving averages (20-day and 50-day SMA). Volume typically increases on up days and decreases on down days. RSI remains between 40-80 range. MACD stays positive with histogram expanding upward. This pattern suggests bullish sentiment and potential continuation of upward movement.
+
+Downtrend Pattern:
+A downtrend shows lower lows and lower highs. Price trades below major moving averages with moving averages sloping downward. Volume increases on down days and decreases on up days. RSI typically stays in 20-60 range. MACD remains negative with expanding negative histogram. This pattern indicates bearish sentiment and potential for continued decline.
+
+Sideways/Consolidation Pattern:
+Price oscillates within a defined range with no clear directional bias. Moving averages flatten and price crosses back and forth across them. Volume tends to decrease during consolidation. RSI oscillates between 30-70. MACD crosses frequently with small histogram values. This pattern often precedes significant breakouts in either direction.
+
+=== REVERSAL PATTERNS ===
+
+Double Bottom (Bullish Reversal):
+Price makes two distinct lows at approximately the same level, forming a "W" shape. The pattern is confirmed when price breaks above the middle peak (neckline). Volume should decrease on the second bottom and increase on the breakout. RSI often shows bullish divergence (higher low in RSI while price makes equal low). This pattern suggests strong support and potential trend reversal to the upside.
+
+Double Top (Bearish Reversal):
+Price creates two peaks at similar levels, forming an "M" shape. Confirmation occurs when price breaks below the middle trough (neckline). Volume typically increases on the breakdown. RSI may show bearish divergence (lower high in RSI while price makes equal high). This pattern indicates strong resistance and potential reversal to the downside.
+
+Head and Shoulders (Bearish Reversal):
+A three-peak pattern where the middle peak (head) is higher than the two surrounding peaks (shoulders). The neckline connects the lows between the peaks. Breakdown below the neckline confirms the pattern. Volume should decline on the head and right shoulder, then increase on the breakdown. This is one of the most reliable reversal patterns indicating trend change from bullish to bearish.
+
+Inverse Head and Shoulders (Bullish Reversal):
+The inverted version of head and shoulders with three troughs. The middle trough (head) is deeper than the two surrounding troughs (shoulders). Breakout above the neckline confirms the pattern. Volume should increase on the breakout. This pattern signals a potential trend reversal from bearish to bullish.
+
+=== CONTINUATION PATTERNS ===
+
+Bull Flag:
+A short-term consolidation that slopes slightly downward or sideways after a strong upward move. The flagpole is the initial sharp rise, and the flag is the consolidation rectangle. Breakout above the flag with increased volume confirms continuation of the uptrend. This pattern suggests bulls are taking a brief rest before continuing higher.
+
+Bear Flag:
+Similar to bull flag but occurs after a sharp decline. The flag consolidates upward or sideways before breaking down. Breakdown below the flag with volume confirms continuation of the downtrend. This pattern indicates bears are pausing before resuming the decline.
+
+Triangle Patterns:
+Symmetrical Triangle: Converging trendlines with lower highs and higher lows. Breakout direction determines trend continuation. Volume decreases during formation and increases on breakout.
+Ascending Triangle: Flat top resistance with rising support. Generally bullish with upward breakout expected.
+Descending Triangle: Flat bottom support with declining resistance. Generally bearish with downward breakdown expected.
+
+=== MOVING AVERAGE ANALYSIS ===
+
+Golden Cross:
+Occurs when the 50-day moving average crosses above the 200-day moving average. This is considered a strong bullish signal indicating potential long-term uptrend. The signal is more reliable when accompanied by increasing volume and confirmed by other indicators. Historical data shows stocks often continue rising for months after a golden cross.
+
+Death Cross:
+The opposite of golden cross - the 50-day moving average crosses below the 200-day moving average. This is a bearish signal suggesting potential long-term downtrend. However, false signals can occur, so confirmation from other indicators is important. The pattern has historically preceded significant market declines.
+
+Moving Average Support/Resistance:
+The 20-day and 50-day moving averages often act as dynamic support in uptrends and resistance in downtrends. When price pulls back to these averages and bounces, it confirms trend strength. Breaks below these averages in an uptrend can signal weakening momentum or potential reversal.
+
+=== RSI (RELATIVE STRENGTH INDEX) ANALYSIS ===
+
+RSI Overbought (Above 70):
+When RSI exceeds 70, the stock is considered overbought, meaning it may have risen too far too fast. This doesn't always mean immediate reversal, as strong trends can remain overbought for extended periods. However, it suggests increased risk and potential for pullback or consolidation.
+
+RSI Oversold (Below 30):
+RSI below 30 indicates oversold conditions where the stock may have fallen too much. This can present buying opportunities, especially if other indicators confirm a potential reversal. In strong downtrends, RSI can remain oversold for extended periods.
+
+RSI Divergence:
+Bullish Divergence: Price makes lower lows while RSI makes higher lows. This suggests weakening downward momentum and potential reversal to upside.
+Bearish Divergence: Price makes higher highs while RSI makes lower highs. This indicates weakening upward momentum and potential reversal to downside.
+
+RSI Midline (50):
+The 50 level on RSI acts as a momentum gauge. Above 50 indicates bulls are in control, below 50 suggests bears are dominant. Crosses of the 50 line can signal changes in momentum direction.
+
+=== MACD (MOVING AVERAGE CONVERGENCE DIVERGENCE) ===
+
+MACD Bullish Crossover:
+When the MACD line crosses above the signal line, it generates a bullish signal. This suggests increasing upward momentum. The signal is stronger when occurring below the zero line and accompanied by expanding histogram bars. This crossover often precedes price rallies.
+
+MACD Bearish Crossover:
+When the MACD line crosses below the signal line, it generates a bearish signal indicating increasing downward momentum. The signal is more significant when occurring above the zero line. This pattern often precedes price declines.
+
+MACD Histogram:
+The histogram represents the difference between MACD and signal lines. Expanding histogram bars show strengthening momentum in the current direction. Contracting bars suggest weakening momentum and potential trend change.
+
+Zero Line Crosses:
+MACD crossing above zero line indicates bullish momentum shift. Crossing below zero shows bearish momentum shift. These are important trend confirmation signals.
+
+=== VOLUME ANALYSIS ===
+
+Volume Confirmation:
+In healthy uptrends, volume should increase on up days and decrease on down days. This confirms buying pressure and trend sustainability. Opposite is true for downtrends. When price moves without volume confirmation, the move is less reliable and may reverse.
+
+Volume Spikes:
+Unusual volume spikes often indicate significant events or institutional activity. High volume on breakouts confirms the move. High volume on reversals suggests strong conviction. Very high volume after extended moves can signal exhaustion and potential reversal.
+
+Volume Drying Up:
+Decreasing volume during consolidation is normal and often precedes breakouts. However, decreasing volume during a trend suggests weakening momentum and potential reversal or consolidation ahead.
+
+=== VOLATILITY INDICATORS ===
+
+ATR (Average True Range):
+ATR measures average price range over a period. Rising ATR indicates increasing volatility and market uncertainty. Falling ATR suggests decreasing volatility and potential consolidation. High ATR can indicate trending markets while low ATR often precedes breakouts.
+
+Bollinger Bands:
+Price touching upper band suggests potential overbought condition. Price at lower band indicates potential oversold condition. Bands contracting (squeeze) often precedes significant price moves. Bands expanding indicates high volatility.
+
+=== RISK CONSIDERATIONS ===
+
+High Volatility Environments:
+Markets with volatility above 3% daily standard deviation carry elevated risk. Position sizes should be reduced. Stop losses should be wider to avoid premature stops. Pattern reliability may decrease. Consider holding for shorter periods or waiting for volatility to decrease.
+
+Low Volume Conditions:
+Trading decisions based on low volume periods are less reliable. Breakouts on low volume often fail. Wait for volume confirmation before taking positions. Thin trading can lead to wider spreads and slippage.
+
+Market Context:
+Individual stock patterns should be considered within broader market context. Strong patterns in stocks can fail during market-wide selloffs. Market indices trends should align with individual stock signals for highest probability trades.
+
+Multiple Timeframe Analysis:
+Signals are more reliable when confirmed across multiple timeframes. A bullish signal on daily chart is stronger if weekly chart also shows bullish structure. Short-term signals can be false if they contradict longer-term trends.
+
+=== DECISION GUIDELINES ===
+
+Strong Buy Signals:
+- Price in uptrend above all major moving averages
+- Golden cross recently formed or in progress
+- RSI between 40-70 (not overbought)
+- MACD bullish crossover with expanding histogram
+- Volume confirming upward moves
+- Bullish chart patterns confirmed
+- Low to moderate volatility
+
+Hold Signals:
+- Mixed or conflicting technical indicators
+- Price in consolidation or sideways pattern
+- Volume declining without clear direction
+- High volatility creating uncertainty
+- Lack of confirmation from multiple indicators
+- Waiting for pattern completion or breakout
+
+Strong Sell Signals:
+- Price in downtrend below major moving averages
+- Death cross formed or forming
+- RSI overbought above 70 or showing bearish divergence
+- MACD bearish crossover with negative histogram
+- Volume confirming downward moves
+- Bearish reversal patterns confirmed
+- Breaking below key support levels
