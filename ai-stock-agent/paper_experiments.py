@@ -361,7 +361,7 @@ def load_ai_results() -> Dict:
     Load paper trading results from the live AI swing trader.
     Returns metrics computed from swing_trades.json.
     """
-    trades_file = Path(__file__).parent / "swing_trades.json"
+    trades_file = Path(__file__).parent / "data" / "swing_trades.json"
     if not trades_file.exists():
         logger.warning("swing_trades.json not found — no AI live results yet")
         return {"strategy": "AI_Swing_Trader", "note": "No live trades yet — run swing_trader.py first"}
@@ -542,7 +542,7 @@ def analyze_confidence_sensitivity() -> pd.DataFrame:
     Using saved paper trades, show how performance changes
     with different confidence thresholds (0.50 – 0.80).
     """
-    trades_file = Path(__file__).parent / "swing_trades.json"
+    trades_file = Path(__file__).parent / "data" / "swing_trades.json"
     if not trades_file.exists():
         return pd.DataFrame()
 

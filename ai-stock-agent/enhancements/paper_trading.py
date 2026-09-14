@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class PaperTradingAccount:
     """Simulated trading account"""
 
-    def __init__(self, starting_balance: float = 10000, data_file: str = "paper_trades.json"):
+    def __init__(self, starting_balance: float = 10000, data_file: str = "data/paper_trades.json"):
         """
         Initialize paper trading account
 

@@ -61,6 +61,12 @@ Thumbs.db
 data/vector_store/
 *.log
 
+# Live paper-trading state — source of truth is the GCS bucket
+# (entrypoint.sh/sync_data.py), not git; committing it would just go
+# stale the moment the scheduled swing-trade job runs on GCP.
+data/paper_trades.json
+data/swing_trades.json
+
 # Keep directory structure
 !data/knowledge_base/.gitkeep
 !data/vector_store/.gitkeep

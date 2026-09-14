@@ -66,7 +66,7 @@ MAX_HOLD_DAYS = 10            # auto-exit after this many calendar days
 MIN_UPSIDE_PCT = 0.05         # require at least 5% upside to target
 STARTING_PORTFOLIO = 10_000   # paper account starting balance ($)
 
-TRADES_FILE = Path(__file__).parent / "swing_trades.json"
+TRADES_FILE = Path(__file__).parent / "data" / "swing_trades.json"
 
 
 class SwingTradingEngine:

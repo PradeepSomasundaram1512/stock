@@ -23,6 +23,8 @@ create_or_update() {
 
     if gcloud scheduler jobs describe "$name" --location="$REGION" >/dev/null 2>&1; then
         echo "Updating $name ($cron ET)..."
+        # `update http` takes --update-headers, not --headers (that's only
+        # accepted by `create http`) — different flag name for the same thing.
         gcloud scheduler jobs update http "$name" \
             --location="$REGION" \
             --schedule="$cron" \
@@ -30,7 +32,7 @@ create_or_update() {
             --uri="$RUN_URI" \
             --http-method=POST \
             --oauth-service-account-email="$SCHEDULER_SA_EMAIL" \
-            --headers="Content-Type=application/json" \
+            --update-headers="Content-Type=application/json" \
             --message-body="$body" >/dev/null
     else
         echo "Creating $name ($cron ET)..."
@@ -57,6 +59,7 @@ create_or_update "stock-scanner-go-no-go"         "50 9 * * 1-5"  '["--go-no-go"
 create_or_update "stock-scanner-hourly-scan"      "0 10-15 * * 1-5" '["--hourly-scan"]'
 create_or_update "stock-scanner-stop-loss-check"  "*/5 9-16 * * 1-5" '["--stop-loss-check"]'
 create_or_update "stock-scanner-closing-recap"    "45 15 * * 1-5" '["--closing-recap"]'
+create_or_update "stock-scanner-swing-trade"      "5 10 * * 1-5"  '["--swing-trade"]'
 
 echo ""
 echo "✓ All schedules created."
