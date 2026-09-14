@@ -55,8 +55,22 @@ echo "Creating service account for Cloud Scheduler ($SCHEDULER_SA_EMAIL)..."
 gcloud iam service-accounts describe "$SCHEDULER_SA_EMAIL" >/dev/null 2>&1 || \
 gcloud iam service-accounts create "$SCHEDULER_SA_NAME" \
     --display-name="Stock scanner Cloud Scheduler invoker"
-# Its permission to trigger the job (roles/run.invoker, scoped to just this
-# job) is granted in 04_deploy_job.sh, once the job resource exists.
+# Its permission to trigger the job (roles/run.developer, scoped to just
+# this job — needed for run.jobs.runWithOverrides, since our schedules pass
+# per-task --args overrides) is granted in 04_deploy_job.sh, once the job
+# resource exists.
+
+# Cloud Scheduler's own service agent has to be allowed to MINT an OAuth
+# token as our scheduler SA (that's what --oauth-service-account-email asks
+# it to do at trigger time). The Console grants this automatically when you
+# create an HTTP+OAuth job through the UI; the CLI does not, so without this
+# every scheduled trigger silently does nothing (no error, no execution).
+echo "Granting Cloud Scheduler's service agent permission to mint tokens as it..."
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+CLOUDSCHEDULER_AGENT="service-${PROJECT_NUMBER}@gcp-sa-cloudscheduler.iam.gserviceaccount.com"
+gcloud iam service-accounts add-iam-policy-binding "$SCHEDULER_SA_EMAIL" \
+    --member="serviceAccount:${CLOUDSCHEDULER_AGENT}" \
+    --role="roles/iam.serviceAccountTokenCreator"
 
 echo ""
 echo "✓ Project setup complete."

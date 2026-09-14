@@ -104,15 +104,25 @@ comment in each script):
 
 1. **`01_setup_project.sh`** — enables the required APIs, creates the
    Artifact Registry repo, the GCS data bucket, and two service accounts
-   (one for the job runtime, one for Cloud Scheduler).
+   (one for the job runtime, one for Cloud Scheduler). Also grants Cloud
+   Scheduler's own service agent permission to mint OAuth tokens as the
+   scheduler SA — the Console does this automatically when you create an
+   HTTP+OAuth job through the UI, but the CLI doesn't, so without it every
+   scheduled trigger fails silently (no error anywhere, no execution ever
+   created).
 2. **`02_create_secrets.sh`** — reads your local `.env` and pushes each key
    into Secret Manager as its own secret (values are piped straight to
    `gcloud`, never printed or logged).
 3. **`03_build_and_push.sh`** — builds the container image with Cloud Build
    and pushes it to Artifact Registry.
 4. **`04_deploy_job.sh`** — creates the Cloud Run Job, wires up the secrets
-   as env vars, mounts the GCS bucket at `data/`, and grants Cloud
-   Scheduler's service account permission to run it.
+   as env vars, sets `DATA_BUCKET` for `entrypoint.sh`'s sync, and grants
+   Cloud Scheduler's service account `roles/run.developer` (scoped to just
+   this job) so it can run it. This has to be `run.developer`, not the more
+   obvious `run.invoker`: `05_schedule_jobs.sh`'s requests include
+   `overrides.containerOverrides` to pick which scheduled task runs, which
+   needs the `run.jobs.runWithOverrides` permission — `run.invoker` only has
+   plain `run.jobs.run` and gets a 403 on any request with overrides.
 5. **`05_schedule_jobs.sh`** — creates the 7 Cloud Scheduler jobs that
    replace the old `--monitor` loop's internal schedule.
 
@@ -197,10 +207,18 @@ gsutil ls gs://YOUR_PROJECT_ID-stock-scanner-data
 a secret referenced in the job spec doesn't exist yet — re-run
 `02_create_secrets.sh` before `04_deploy_job.sh`.
 
-**"Permission denied" calling the Cloud Run Jobs API from Cloud Scheduler** —
-the scheduler service account needs `roles/run.invoker` on the specific job;
-`04_deploy_job.sh` grants this after the job is created, so it must run
-before `05_schedule_jobs.sh` (already the order in `deploy_all.sh`).
+**"Permission denied" (403) calling the Cloud Run Jobs API from Cloud
+Scheduler** — check `gcloud logging read 'logName:"cloudscheduler.googleapis.com"'`
+for the actual `AttemptFinished` error; `gcloud scheduler jobs run` itself
+always returns success (it only confirms Scheduler *accepted* the trigger,
+not that the downstream call succeeded), so this failure mode is otherwise
+silent. Two distinct causes, both need the fix to have run before
+`05_schedule_jobs.sh` (already the order in `deploy_all.sh`):
+- The scheduler service account needs `roles/run.developer` (not
+  `run.invoker` — see the `04_deploy_job.sh` note above) on the specific job.
+- Cloud Scheduler's own service agent needs `roles/iam.serviceAccountTokenCreator`
+  on the scheduler service account, or it can't mint the OAuth token it
+  sends — `01_setup_project.sh` grants this.
 
 **SQLite "database is locked" errors** — `data/` is local disk inside each
 execution (downloaded from GCS at start, uploaded back at end), so this can

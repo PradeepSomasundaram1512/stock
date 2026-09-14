@@ -42,6 +42,8 @@ gcloud run jobs deploy "$JOB_NAME" \
     --image="${IMAGE_URI}:latest" \
     --region="$REGION" \
     --service-account="$RUN_SA_EMAIL" \
+    --clear-volumes \
+    --clear-volume-mounts \
     --set-env-vars="DATA_BUCKET=${BUCKET_NAME}" \
     --set-secrets="$SECRETS" \
     --memory=4Gi \
@@ -51,10 +53,14 @@ gcloud run jobs deploy "$JOB_NAME" \
 
 echo ""
 echo "Granting Cloud Scheduler's service account permission to run this job..."
+# roles/run.developer, not roles/run.invoker: 05_schedule_jobs.sh's request
+# body includes overrides.containerOverrides (to pick which scheduled task
+# runs), which needs the run.jobs.runWithOverrides permission — invoker only
+# has plain run.jobs.run and gets a 403 on any request with overrides.
 gcloud run jobs add-iam-policy-binding "$JOB_NAME" \
     --region="$REGION" \
     --member="serviceAccount:${SCHEDULER_SA_EMAIL}" \
-    --role="roles/run.invoker"
+    --role="roles/run.developer"
 
 echo ""
 echo "✓ Job deployed. Test it once manually:"
