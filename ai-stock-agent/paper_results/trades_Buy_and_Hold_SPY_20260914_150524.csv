@@ -1,0 +1,2 @@
+ticker,entry,exit,pnl_pct,reason,strategy
+SPY,458.81,576.22,25.59,HOLD_TO_END,Buy_and_Hold_SPY

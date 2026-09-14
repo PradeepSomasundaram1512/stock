@@ -158,6 +158,10 @@ def run_rsi_strategy(tickers: List[str], start: datetime, end: datetime) -> Dict
                 cost_basis= pos["shares"] * pos["entry"]
                 pnl       = proceeds - cost_basis
                 pnl_pct   = (pnl / cost_basis) * 100
+                # `cost_basis` was already deducted from capital when the
+                # position was opened, so closing it out only needs to add
+                # back the sale proceeds — capital ends up net +pnl, which
+                # is all that should happen.
                 capital  += proceeds
                 trades.append({
                     "ticker": ticker, "entry": pos["entry"], "exit": price,
@@ -166,10 +170,6 @@ def run_rsi_strategy(tickers: List[str], start: datetime, end: datetime) -> Dict
                     "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
                     "reason": reason, "strategy": "RSI_ONLY",
                 })
-                capital -= pos["entry"] * pos["shares"]   # already added proceeds; remove double
-                capital += pnl                             # net: just the profit/loss
-                # Fix: revert to simple accounting
-                capital  = capital - proceeds + proceeds  # no-op, fix below
                 del open_positions[ticker]
 
         # 2. Scan for new entries
@@ -210,7 +210,7 @@ def run_rsi_strategy(tickers: List[str], start: datetime, end: datetime) -> Dict
         proceeds= pos["shares"] * price
         pnl     = proceeds - pos["shares"] * pos["entry"]
         pnl_pct = (pnl / (pos["shares"] * pos["entry"])) * 100
-        capital += proceeds - pos["shares"] * pos["entry"]   # add profit only (cost already deducted)
+        capital += proceeds   # cost was already deducted at entry; add back proceeds only
         trades.append({
             "ticker": ticker, "entry": pos["entry"], "exit": price,
             "entry_date": pos["entry_date"].date().isoformat(),
@@ -301,7 +301,8 @@ def run_random_strategy(tickers: List[str], start: datetime, end: datetime,
                 if reason:
                     pnl     = (price - pos["entry"]) * pos["shares"]
                     pnl_pct = (pnl / (pos["entry"] * pos["shares"])) * 100
-                    capital += pnl
+                    # cost was already deducted at entry; add back proceeds only
+                    capital += pos["shares"] * price
                     trades.append({"pnl": pnl, "pnl_pct": pnl_pct, "reason": reason})
                     del open_positions[ticker]
 
@@ -333,7 +334,7 @@ def run_random_strategy(tickers: List[str], start: datetime, end: datetime,
                 continue
             price   = float(df.iloc[-1]["Close"])
             pnl     = (price - pos["entry"]) * pos["shares"]
-            capital += pnl
+            capital += pos["shares"] * price   # cost already deducted at entry; add back proceeds only
             trades.append({"pnl": pnl, "pnl_pct": (pnl / (pos["entry"] * pos["shares"])) * 100,
                            "reason": "END_OF_PERIOD"})
 
@@ -476,7 +477,8 @@ def run_ablation_rsi_variants(tickers: List[str], start: datetime, end: datetime
                 elif held >= MAX_HOLD:       reason = "TIME_EXPIRED"
                 if reason:
                     pnl = (price - pos["entry"]) * pos["shares"]
-                    capital += pnl
+                    # cost was already deducted at entry; add back proceeds only
+                    capital += pos["shares"] * price
                     trades.append({
                         "pnl": pnl,
                         "pnl_pct": (pnl / (pos["entry"] * pos["shares"])) * 100,
@@ -507,6 +509,22 @@ def run_ablation_rsi_variants(tickers: List[str], start: datetime, end: datetime
                         "entry": price, "stop": stop, "target": target,
                         "shares": shares, "entry_date": today,
                     }
+
+        # Close any positions still open at period end (this loop had no
+        # such step before, so their cost stayed deducted from capital
+        # forever without ever crediting back the exit value)
+        for ticker, pos in open_pos.items():
+            df = get_daily_data(ticker, start, end)
+            if df.empty:
+                continue
+            price = float(df.iloc[-1]["Close"])
+            pnl   = (price - pos["entry"]) * pos["shares"]
+            capital += pos["shares"] * price
+            trades.append({
+                "pnl": pnl,
+                "pnl_pct": (pnl / (pos["entry"] * pos["shares"])) * 100,
+                "reason": "END_OF_PERIOD",
+            })
 
         m = _compute_metrics(trades, INITIAL_CAPITAL, capital, f"RSI_threshold_{threshold}")
         m["rsi_threshold"] = threshold
