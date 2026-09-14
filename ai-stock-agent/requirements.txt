@@ -1,11 +1,14 @@
 # Core dependencies
-python-dotenv==1.0.0
-pydantic==2.5.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+
+# GCP Cloud Run Job data sync (deploy/gcp/sync_data.py)
+google-cloud-storage>=2.18.0
 
 # Data & Finance
 yfinance>=0.2.32
 pandas>=2.2.0
-numpy>=1.26.0
+numpy>=2.0.0  # Python 3.13 requires numpy 2.0+
 scipy>=1.11.0
 
 # Visualization (optional)
@@ -17,43 +20,45 @@ langchain>=0.1.0
 langchain-openai>=0.0.2
 langchain-anthropic>=0.1.0
 langchain-community>=0.0.10
+langchain-text-splitters>=0.0.1
 langgraph>=0.0.20
 
-# Vector DB
-faiss-cpu==1.7.4
-chromadb==0.4.18
+# Vector DB (updated for Python 3.13 compatibility)
+faiss-cpu>=1.9.0
+chromadb>=0.4.18
 
 # Text processing
-tiktoken==0.5.2
+tiktoken>=0.5.2
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
 
 # Scheduler
-APScheduler==3.10.4
+APScheduler>=3.10.4
 schedule>=1.2.0  # Simple job scheduling for automated trading
 
 # Notifications
-plyer==2.1.0  # Cross-platform desktop notifications
-pyttsx3==2.90  # Text-to-speech for voice notifications
+plyer>=2.1.0  # Cross-platform desktop notifications
+pyttsx3>=2.90  # Text-to-speech for voice notifications
 twilio>=8.0.0  # SMS notifications (optional)
 # Note: Email notifications work without additional packages
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy>=2.0.23
 
 # Web scraping for news
-beautifulsoup4==4.12.2
-requests==2.31.0
-lxml==4.9.3
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+lxml>=4.9.3
 
 # News APIs (optional but recommended)
-newsapi-python==0.2.7  # NewsAPI integration
-finnhub-python==2.4.19  # Finnhub financial news
-alpha-vantage==2.3.1  # Alpha Vantage news sentiment
+newsapi-python>=0.2.7  # NewsAPI integration
+finnhub-python>=2.4.19  # Finnhub financial news
+alpha-vantage>=2.3.1  # Alpha Vantage news sentiment
 
 # Machine Learning (optional but powerful)
-tensorflow>=2.16.0  # LSTM neural networks (works with Python 3.9-3.12)
+# Note: TensorFlow 2.18+ supports Python 3.13
+tensorflow>=2.18.0  # LSTM neural networks (Python 3.13 compatible)
 xgboost>=2.0.0  # Gradient boosting
 scikit-learn>=1.3.0  # ML utilities and preprocessing

@@ -19,6 +19,7 @@ langchain==0.1.0
 langchain-openai==0.0.2
 langchain-anthropic==0.1.0
 langchain-community==0.0.10
+langchain-text-splitters>=0.0.1
 langgraph==0.0.20
 
 # Vector DB
@@ -34,10 +35,29 @@ pytest-asyncio==0.21.1
 
 # Scheduler
 APScheduler==3.10.4
+schedule>=1.2.0  # Simple job scheduling for automated trading
 
 # Notifications
-plyer==2.1.0
-pyttsx3==2.90
+plyer==2.1.0  # Cross-platform desktop notifications
+pyttsx3==2.90  # Text-to-speech for voice notifications
+twilio>=8.0.0  # SMS notifications (optional)
+# Note: Email notifications work without additional packages
 
 # Database
 sqlalchemy==2.0.23
+
+# Web scraping for news
+beautifulsoup4==4.12.2
+requests==2.31.0
+lxml==4.9.3
+
+# News APIs (optional but recommended)
+newsapi-python==0.2.7  # NewsAPI integration
+finnhub-python==2.4.19  # Finnhub financial news
+alpha-vantage==2.3.1  # Alpha Vantage news sentiment
+
+# Machine Learning (optional but powerful)
+# Note: On Windows, TensorFlow installation may require specific versions
+tensorflow>=2.14.0  # LSTM neural networks (use 2.14+ for Windows compatibility)
+xgboost>=2.0.0  # Gradient boosting
+scikit-learn>=1.3.0  # ML utilities and preprocessing

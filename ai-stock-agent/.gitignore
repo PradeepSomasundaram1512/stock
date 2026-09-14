@@ -22,8 +22,18 @@ wheels/
 
 # Virtual Environment
 venv/
+venv312/
 env/
 ENV/
+
+# Installers (large binaries that don't belong in source control)
+*.exe
+
+# Claude Code stray artifacts
+claude-*-cwd
+
+# Test/debug scratch output
+discord_test_output.txt
 
 # Environment variables
 .env

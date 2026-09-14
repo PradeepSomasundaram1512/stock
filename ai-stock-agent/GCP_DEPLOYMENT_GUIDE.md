@@ -1,0 +1,226 @@
+# 🚀 GCP Deployment Guide — Cloud Run Jobs + Cloud Scheduler
+
+This replaces the [AWS EC2 setup](AWS_DEPLOYMENT_GUIDE.md) with a serverless
+GCP deployment: instead of one VM running 24/7, each scheduled task
+(pre-market brief, hourly scan, stop-loss check, etc.) runs as a short-lived
+**Cloud Run Job** execution, triggered by **Cloud Scheduler**. You only pay
+for the seconds each job actually runs.
+
+---
+
+## 🏗 Architecture
+
+```
+Cloud Scheduler (7 cron schedules, America/New_York)
+        │  each fires a different --args override
+        ▼
+Cloud Run Job "stock-scanner"  (one container image, many executions)
+        │
+        ├─> entrypoint.sh: download data/ from GCS, run the scan, upload
+        │     data/ back to GCS (portfolio.db, backtest.db, watchlist.txt,
+        │     vector store) — this is what makes state survive between
+        │     executions, without mounting SQLite files on GCS FUSE
+        │
+        ├─> Secret Manager  (API keys, injected as env vars)
+        │
+        ├─> Yahoo Finance, OpenAI, NewsAPI, Finnhub, ...
+        └─> Discord webhook
+```
+
+Why Jobs instead of a Compute Engine VM: the workload is inherently
+scheduled (nothing needs to run between scans), so a 24/7 VM is mostly idle
+capacity you're paying for. Cloud Run Jobs bill per-second of actual
+execution — a handful of scans a day costs cents, not a monthly VM bill.
+
+Why download/upload instead of a live GCS FUSE mount: SQLite writes its
+rollback journal (and WAL, if enabled) at random offsets, which GCS FUSE's
+streaming writes don't support — mounting the DB directly threw repeated
+`BufferedWriteHandler.OutOfOrderError`s in testing. `entrypoint.sh` instead
+pulls `data/` down to local disk before the scan and pushes it back after
+(`deploy/gcp/sync_data.py`), so SQLite gets a normal local filesystem and the
+bucket only ever sees whole-file object writes. This is safe because
+schedules don't overlap (one job execution at a time) — if you later add
+concurrent writers, migrate `tools/db_manager.py` and `portfolio/manager.py`
+to Cloud SQL instead.
+
+---
+
+## 💰 Cost
+
+| Component | Cost/month | Notes |
+|---|---|---|
+| Cloud Run Jobs execution time | ~$1-5 | Pay per vCPU-second/GB-second actually used, roughly a dozen runs/day at a few minutes each |
+| Cloud Build (image builds) | $0 | 120 free build-minutes/day, plenty for occasional deploys |
+| Artifact Registry storage | ~$0.10 | One container image, a few hundred MB |
+| GCS bucket (data/) | ~$0.02 | A few MB of SQLite files |
+| Secret Manager | $0.06/secret/month after first 6 free | ~$1-2 for ~25 keys |
+| **Total** | **~$3-8/month** | Scales with how often you schedule scans, not a flat VM fee |
+
+New GCP accounts also get a $300 / 90-day free credit, and Cloud Run/Cloud
+Build both have standing always-free monthly quotas this workload will
+likely stay under entirely.
+
+---
+
+## 📋 Prerequisites
+
+- A GCP account with billing enabled (`console.cloud.google.com`)
+- `gcloud` CLI installed — you already have it (`/opt/homebrew/bin/gcloud`)
+- Your existing `.env` file with API keys, filled in as usual
+- Docker is **not** required locally — Cloud Build builds the image for you
+
+---
+
+## 🚀 Step-by-Step
+
+### Phase 1: Create and authenticate a GCP project (5 minutes)
+
+```bash
+# Log in (opens a browser)
+gcloud auth login
+
+# Create a new project (id must be globally unique) — or reuse an existing one
+gcloud projects create YOUR_PROJECT_ID --name="Stock Scanner"
+
+# Link billing — list your billing accounts, then link one
+gcloud billing accounts list
+gcloud billing projects link YOUR_PROJECT_ID --billing-account=YOUR_BILLING_ACCOUNT_ID
+
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### Phase 2: Run the deploy scripts (10-15 minutes, mostly waiting on builds)
+
+From `ai-stock-agent/`:
+
+```bash
+export PROJECT_ID=YOUR_PROJECT_ID
+
+./deploy/gcp/deploy_all.sh
+```
+
+This runs, in order (you can also run each individually — see the header
+comment in each script):
+
+1. **`01_setup_project.sh`** — enables the required APIs, creates the
+   Artifact Registry repo, the GCS data bucket, and two service accounts
+   (one for the job runtime, one for Cloud Scheduler).
+2. **`02_create_secrets.sh`** — reads your local `.env` and pushes each key
+   into Secret Manager as its own secret (values are piped straight to
+   `gcloud`, never printed or logged).
+3. **`03_build_and_push.sh`** — builds the container image with Cloud Build
+   and pushes it to Artifact Registry.
+4. **`04_deploy_job.sh`** — creates the Cloud Run Job, wires up the secrets
+   as env vars, mounts the GCS bucket at `data/`, and grants Cloud
+   Scheduler's service account permission to run it.
+5. **`05_schedule_jobs.sh`** — creates the 7 Cloud Scheduler jobs that
+   replace the old `--monitor` loop's internal schedule.
+
+### Phase 3: Verify (5 minutes)
+
+```bash
+# Manually run one execution to confirm the container works end-to-end
+gcloud run jobs execute stock-scanner --region=us-central1 --args=--test-discord
+
+# Watch it
+gcloud run jobs executions list --job=stock-scanner --region=us-central1
+
+# Check logs for the most recent execution
+gcloud logging read \
+  'resource.type=cloud_run_job AND resource.labels.job_name=stock-scanner' \
+  --limit=50 --format='value(textPayload)'
+```
+
+You should see a Discord test notification, same as the old
+`python ultimate_market_scanner.py --test-discord`.
+
+Trigger a real scan the same way:
+
+```bash
+gcloud run jobs execute stock-scanner --region=us-central1 --args=--hourly-scan
+```
+
+---
+
+## 🎛 Managing It
+
+### Update the code
+
+```bash
+./deploy/gcp/03_build_and_push.sh   # rebuild image
+./deploy/gcp/04_deploy_job.sh       # point the job at the new image
+```
+
+### Rotate an API key
+
+Edit `.env`, then:
+
+```bash
+./deploy/gcp/02_create_secrets.sh
+```
+
+(No redeploy needed — the job reads `:latest` for each secret on every
+execution.)
+
+### View logs
+
+```bash
+gcloud logging read \
+  'resource.type=cloud_run_job AND resource.labels.job_name=stock-scanner' \
+  --limit=100 --freshness=1d
+
+# Or in the console:
+# https://console.cloud.google.com/run/jobs/details/us-central1/stock-scanner/executions
+```
+
+### Pause / resume a schedule
+
+```bash
+gcloud scheduler jobs pause stock-scanner-hourly-scan --location=us-central1
+gcloud scheduler jobs resume stock-scanner-hourly-scan --location=us-central1
+```
+
+### List everything that was created
+
+```bash
+gcloud run jobs list --region=us-central1
+gcloud scheduler jobs list --location=us-central1
+gcloud secrets list
+gsutil ls gs://YOUR_PROJECT_ID-stock-scanner-data
+```
+
+---
+
+## 🆘 Troubleshooting
+
+**Job execution fails immediately** — check logs (above). Most common cause:
+a secret referenced in the job spec doesn't exist yet — re-run
+`02_create_secrets.sh` before `04_deploy_job.sh`.
+
+**"Permission denied" calling the Cloud Run Jobs API from Cloud Scheduler** —
+the scheduler service account needs `roles/run.invoker` on the specific job;
+`04_deploy_job.sh` grants this after the job is created, so it must run
+before `05_schedule_jobs.sh` (already the order in `deploy_all.sh`).
+
+**SQLite "database is locked" errors** — `data/` is local disk inside each
+execution (downloaded from GCS at start, uploaded back at end), so this can
+only happen if two executions run concurrently against the same bucket state.
+This setup avoids that by design (schedules don't overlap); if you manually
+trigger executions concurrently, wait for one to finish before triggering
+another.
+
+**Out of memory / slow scans** — bump `--memory` and `--cpu` in
+`04_deploy_job.sh` (currently 4Gi/2 vCPU, matching the AWS guide's
+recommended t3.medium) and re-run it.
+
+---
+
+## Rolling back to AWS
+
+Nothing about this migration deletes the AWS setup — `AWS_DEPLOYMENT_GUIDE.md`
+and `deploy/*.sh` (the EC2 scripts) are untouched. The only code change is
+additive: new `--hourly-scan` / `--premarket-brief` / `--gap-scan` /
+`--go-no-go` / `--stop-loss-check` / `--weekly-report` / `--closing-recap`
+flags on `ultimate_market_scanner.py` alongside the existing `--scan-now` and
+`--monitor`, so the EC2 systemd service keeps working unmodified if you ever
+want to go back.

@@ -16,7 +16,7 @@ from agents.graph_feature_agent import get_graph_feature_agent
 from agents.fundamental_agent import get_fundamental_agent
 from agents.enhanced_news_agent import get_enhanced_news_agent
 from agents.market_context_agent import get_market_context_agent
-from agents.autonomous_reasoning_agent import get_autonomous_reasoning_agent
+from agents.autonomous_reasoning_agent import get_autonomous_reasoning_agent, get_swing_reasoning_agent
 from agents.rag_agent import get_rag_agent
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class AutonomousGraphState(TypedDict):
     ticker: str
     period: str
     interval: str
+    sector_perf: Dict[str, float]
     stock_data: Any
     features: Dict[str, Any]
     fundamentals: Dict[str, Any]
@@ -40,14 +41,21 @@ class AutonomousGraphState(TypedDict):
 class AutonomousStockDecisionGraph:
     """LangGraph-based autonomous decision workflow."""
 
-    def __init__(self):
-        """Initialize the autonomous decision graph."""
+    def __init__(self, swing_mode: bool = False):
+        """Initialize the autonomous decision graph.
+
+        Args:
+            swing_mode: If True, use swing trading reasoning agent and daily-chart defaults.
+        """
+        self.swing_mode = swing_mode
         self.data_agent = get_data_agent()
         self.feature_agent = get_graph_feature_agent()
         self.fundamental_agent = get_fundamental_agent()
-        self.news_agent = get_enhanced_news_agent()  # Using enhanced news agent
+        self.news_agent = get_enhanced_news_agent()
         self.market_context_agent = get_market_context_agent()
-        self.autonomous_reasoning_agent = get_autonomous_reasoning_agent()
+        self.autonomous_reasoning_agent = (
+            get_swing_reasoning_agent() if swing_mode else get_autonomous_reasoning_agent()
+        )
         self.rag_agent = get_rag_agent()
         self.graph = self._build_graph()
 
@@ -85,8 +93,8 @@ class AutonomousStockDecisionGraph:
         try:
             df = self.data_agent.fetch_stock_data(
                 state['ticker'],
-                state.get('period', '6mo'),
-                state.get('interval', '1d')
+                state.get('period', '60d'),
+                state.get('interval', '60m')
             )
 
             if df is None or df.empty:
@@ -209,6 +217,8 @@ class AutonomousStockDecisionGraph:
 
         try:
             market_context = self.market_context_agent.get_market_context()
+            # Inject sector performance passed in via graph state (fetched once per scan)
+            market_context['sector_perf'] = state.get('sector_perf', {})
             state['market_context'] = market_context
 
             trend = market_context.get('market_trend', 'neutral')
@@ -222,7 +232,8 @@ class AutonomousStockDecisionGraph:
                 'market_trend': 'neutral',
                 'market_strength': 0.5,
                 'volatility_index': None,
-                'indices': {}
+                'indices': {},
+                'sector_perf': state.get('sector_perf', {}),
             }
 
         return state
@@ -300,7 +311,7 @@ class AutonomousStockDecisionGraph:
 
         return state
 
-    def run(self, ticker: str, period: str = "6mo", interval: str = "1d") -> Dict[str, Any]:
+    def run(self, ticker: str, period: str = "60d", interval: str = "60m") -> Dict[str, Any]:
         """
         Run the autonomous decision graph for a ticker.
 
@@ -356,13 +367,22 @@ class AutonomousStockDecisionGraph:
             }
 
 
-# Singleton instance
+# Singleton instances
 _autonomous_decision_graph_instance = None
+_swing_decision_graph_instance = None
 
 
 def get_autonomous_decision_graph() -> AutonomousStockDecisionGraph:
-    """Get or create the AutonomousStockDecisionGraph singleton."""
+    """Get or create the AutonomousStockDecisionGraph singleton (intraday)."""
     global _autonomous_decision_graph_instance
     if _autonomous_decision_graph_instance is None:
         _autonomous_decision_graph_instance = AutonomousStockDecisionGraph()
     return _autonomous_decision_graph_instance
+
+
+def get_swing_decision_graph() -> AutonomousStockDecisionGraph:
+    """Get or create the AutonomousStockDecisionGraph singleton (swing mode, daily charts)."""
+    global _swing_decision_graph_instance
+    if _swing_decision_graph_instance is None:
+        _swing_decision_graph_instance = AutonomousStockDecisionGraph(swing_mode=True)
+    return _swing_decision_graph_instance

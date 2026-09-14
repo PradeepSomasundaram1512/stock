@@ -1,0 +1,5 @@
+strategy,total_trades,win_rate_pct,total_return_pct,annualized_return_pct,sharpe_ratio,max_drawdown_pct,avg_trade_return_pct,profit_factor,final_capital
+RSI_Only_Baseline,15.0,53.33,-99.87,-99.87,-0.045,-1.57,-0.04,0.973,12.8
+Buy_and_Hold_SPY,1.0,100.0,8.16,16.94,1.165,-8.41,8.16,,10816.3
+Random_Entry_Baseline,14.0,45.306,-98.801,-98.801,-0.16,-2.237,-0.149,,119.89
+AI_Swing_Trader,,,,,,,,,

@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Installers (large binaries that don't belong in source control)
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+venv312/
+env/
+ENV/
+
+# Claude Code stray artifacts
+claude-*-cwd

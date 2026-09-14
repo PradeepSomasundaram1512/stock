@@ -1,0 +1,5 @@
+strategy,rsi_threshold,total_trades,win_rate_pct,total_return_pct,sharpe_ratio,max_drawdown_pct
+RSI_threshold_40,40,16,43.75,-99.7,0.064,-2.65
+RSI_threshold_35,35,15,46.67,-99.18,0.31,-2.71
+RSI_threshold_30,30,17,58.82,-99.48,1.353,-2.25
+RSI_threshold_25,25,16,68.75,-93.36,1.652,-1.77
