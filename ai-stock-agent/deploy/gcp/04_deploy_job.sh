@@ -40,7 +40,7 @@ echo "========================================="
 
 # Cloud Run Jobs have a fixed ~70 s startup cost, and the machine size adds to
 # it (measured: 1 CPU/1 GiB ~71 s vs 2 CPU/4 GiB ~103 s for a no-op). Full
-# scans need the big machine; the 5-minute stop-loss check only reads a few
+# scans need the big machine; the 15-minute stop-loss check only reads a few
 # prices, so it gets its own small job — ~84 runs/day, faster and ~4x cheaper.
 # Shadow model (see shadow.py): a second model answers the same prompt on the same inputs and is
 # only logged. Cheap by construction: GPT-6 Luna ~ $0.0004/decision (~$2/month at ~240 decisions a day)

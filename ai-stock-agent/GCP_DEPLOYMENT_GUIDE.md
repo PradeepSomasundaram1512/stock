@@ -40,7 +40,7 @@ pulls `data/` down to local disk before the scan and pushes it back after
 (`deploy/gcp/sync_data.py`), so SQLite gets a normal local filesystem and the
 bucket only ever sees whole-file object writes.
 
-Executions DO overlap in practice (the 5-minute stop-loss check runs alongside
+Executions DO overlap in practice (the 15-minute stop-loss check runs alongside
 scans and the swing trader), and a plain download-everything/upload-everything
 cycle is last-writer-wins: a slow run silently overwrote a faster run's
 results with its stale copy (this lost the 9/24 swing-trade exits before it
@@ -217,7 +217,7 @@ neither our image size nor the 28 Secret Manager env vars changed that
 ~1m43s at 2 CPU/4 GiB and ~71 s at 1 CPU/1 GiB). Machine size does add to it, so:
 
 - `stock-scanner` (2 CPU / 4 GiB) runs the scans, briefs and swing trader.
-- `stock-scanner-light` (1 CPU / 1 GiB) runs only the 5-minute stop-loss
+- `stock-scanner-light` (1 CPU / 1 GiB) runs only the 15-minute stop-loss
   check (~84 runs/day), which just reads a few prices.
 - The container image dropped from 1.4 GB to 390 MB by installing
   `requirements-cloud.txt` (no TensorFlow/xgboost/scikit-learn/scipy/
@@ -416,3 +416,11 @@ after 45 days as `data/public_revealed.csv`. The chain head is posted to Discord
 `python verify_chain.py verify chain.json revealed.csv` (stdlib only, served at `/public/verify_chain.py`). It proves released
 decisions were not edited after commit; it cannot prove a day's list was complete when committed. Tests: `python tests/test_track_record.py`,
 `python dashboard/test_auth.py`.
+
+## Cost
+
+Measured (2026-09-25): about $7-12/month on GCP and $4-9/month on OpenAI. Cloud Run jobs are billed at $0.000018 per vCPU-second and
+$0.000002 per GiB-second (us-central1). The stop-loss check was the biggest line (~150 s per run); it now runs every 15 minutes instead
+of every 5, cutting that part by two thirds. A budget alert ("Stock scanner monthly", $25, alerts at 50/90/100%) emails the billing
+account admins; it warns but does not stop spending. List it with
+`gcloud billing budgets list --billing-account=<id>`. The shadow model has its own daily cap (`SHADOW_DAILY_BUDGET_USD`, default $0.25).
