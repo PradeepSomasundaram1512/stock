@@ -189,6 +189,16 @@ SP500_ALL = [
 
 # Popular subset for quick scans (top 100 by market cap)
 SP500_ALL = list(dict.fromkeys(SP500_ALL))   # the literal above lists ~180 tickers more than once
+# The hand-typed list drifted from the index (83 members missing, 49 non-members). scan_universe.py keeps a refreshed copy
+# in data/scan_universe.json (weekly job); it is used when present, valid and recent, otherwise the list above stands.
+try:
+    from scan_universe import load_universe
+    _refreshed = load_universe(SP500_ALL)
+    if _refreshed != SP500_ALL:
+        logging.getLogger(__name__).info(f"Scan universe: using the refreshed list ({len(_refreshed)} tickers, built-in had {len(SP500_ALL)})")
+        SP500_ALL = _refreshed
+except Exception as _e:      # noqa: BLE001 - never let the universe refresh stop a scan
+    logging.getLogger(__name__).warning(f"Scan universe refresh not used ({_e}); built-in list stands")
 SP500_POPULAR = SP500_ALL[:100]
 
 

@@ -47,7 +47,7 @@ import market_clock
 CACHE = Path(os.environ.get("DATA_DIR") or "/tmp/dashboard-data")
 CACHE_TTL = int(os.environ.get("CACHE_TTL", "60"))
 FILES = ("backtest.db", "paper_trades.json", "swing_trades.json", "forward_test.json",
-         "track_record_chain.json", "public_revealed.csv", "market_snapshot.json")
+         "track_record_chain.json", "public_revealed.csv", "market_snapshot.json", "scan_universe.json")
 _lock = threading.Lock()
 _fetched = 0.0
 
@@ -277,7 +277,9 @@ def heatmap(q=None) -> dict:
     snap_f, sec_f = CACHE / "market_snapshot.json", HERE / "sectors.json"
     if not snap_f.exists():
         return {"stocks": [], "sectors": [], "note": "No snapshot yet: it is written every 30 minutes while the market is open."}
-    snap, sectors = json.loads(snap_f.read_text()), (json.loads(sec_f.read_text()) if sec_f.exists() else {})
+    snap = json.loads(snap_f.read_text())
+    uni_f = CACHE / "scan_universe.json"       # refreshed weekly with the universe; the static file is the fallback
+    sectors = (json.loads(uni_f.read_text()).get("sectors") if uni_f.exists() else None) or (json.loads(sec_f.read_text()) if sec_f.exists() else {})
     con = db()
     latest = con.execute("select scan_id from llm_decisions order by decided_at desc limit 1").fetchone()
     called = ({r[0]: r[1] for r in con.execute("select ticker, raw_decision from llm_decisions where scan_id=?", (latest[0],))} if latest else {})

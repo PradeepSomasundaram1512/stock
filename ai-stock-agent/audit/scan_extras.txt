@@ -1,0 +1,17 @@
+# Tickers scanned IN ADDITION to the S&P 500 (one per line; # starts a comment). Empty by default.
+# Until 2026-09-25 the hand-typed scan list also carried these non-index names. Uncomment any you want kept:
+#SNOW
+#SHOP
+#ROKU
+#RBLX
+#DKNG
+#SOFI
+#RIVN
+#AFRM
+#UPST
+#ZM
+#DOCU
+#OKTA
+#TWLO
+#PATH
+#LCID

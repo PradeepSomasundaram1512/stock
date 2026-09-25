@@ -13,7 +13,8 @@
 # the default ultimate_market_scanner.py; --digest posts the end-of-day health
 # digest (daily_digest.py); --forward-test runs the pre-registered forward test
 # (forward_test.py) and posts its status; --market-snapshot writes the dashboard
-# heatmap's price snapshot (market_snapshot.py); every other arg (or none) goes to
+# heatmap's price snapshot (market_snapshot.py); --refresh-universe rebuilds the
+# scan list from the live S&P 500 (scan_universe.py); every other arg (or none) goes to
 # ultimate_market_scanner.py as before.
 #
 set -uo pipefail
@@ -44,6 +45,9 @@ if [ "${1:-}" = "--swing-trade" ]; then
     STATUS=${PIPESTATUS[0]}
 elif [ "${1:-}" = "--forward-test" ]; then
     python -u forward_test.py forward data/backtest.db --out data/forward_test.json --discord 2>&1 | tee "$LOGF"
+    STATUS=${PIPESTATUS[0]}
+elif [ "${1:-}" = "--refresh-universe" ]; then
+    python -u scan_universe.py refresh --discord 2>&1 | tee "$LOGF"
     STATUS=${PIPESTATUS[0]}
 elif [ "${1:-}" = "--market-snapshot" ]; then
     python -u market_snapshot.py --out data/market_snapshot.json 2>&1 | tee "$LOGF"

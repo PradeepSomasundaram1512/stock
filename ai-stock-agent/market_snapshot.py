@@ -21,10 +21,9 @@ HERE = Path(__file__).parent
 
 
 def universe() -> list:
-    """The scanner's ticker list, read from its source (importing the scanner takes ~20 s)."""
-    src = (HERE / "ultimate_market_scanner.py").read_text()
-    body = re.search(r"SP500_ALL = \[(.*?)\n\]", src, re.S).group(1)
-    return list(dict.fromkeys(re.findall(r"'([A-Z][A-Z0-9.\-]*)'", body)))
+    """The scan universe: the refreshed list (scan_universe.py) when present and valid, else the scanner's built-in one."""
+    from scan_universe import builtin_default, load_universe
+    return load_universe(builtin_default())
 
 
 def rsi14(close: pd.Series):
