@@ -1,42 +1,29 @@
 #!/bin/bash
 #
-# Who may sign in to the dashboard (Google sign-in via Cloud Run IAP). Nobody is allowed
-# unless listed here; there is no public access.
+# Who may sign in to the dashboard: the invite list in gs://<project>-stock-dashboard-config/allowed_emails.json.
+# Nobody is allowed unless listed. Changes take effect within about a minute, including for people
+# already signed in (the app re-checks the list on every request).
 #
 #   ./deploy/gcp/dashboard_access.sh list
 #   ./deploy/gcp/dashboard_access.sh invite tester@gmail.com
 #   ./deploy/gcp/dashboard_access.sh revoke tester@gmail.com
-#
-# Uses the IAP REST API directly (the `gcloud beta iap` route prompts to install a component).
-SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")"
 source ./config.sh
-SERVICE="stock-dashboard"
-NUM=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-RES="projects/${NUM}/iap_web/cloud_run-${REGION}/services/${SERVICE}"
-API="https://iap.googleapis.com/v1/${RES}"
-TOKEN=$(gcloud auth print-access-token)
-call() { curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -H "x-goog-user-project: $PROJECT_ID" -d "$2" "${API}:$1"; }
-
+FILE="gs://${PROJECT_ID}-stock-dashboard-config/allowed_emails.json"
 ACTION="${1:-list}"; EMAIL="${2:-}"
-POLICY=$(call getIamPolicy '{}')
+
+CURRENT=$(gcloud storage cat "$FILE" 2>/dev/null || echo '[]')
 if [ "$ACTION" = "list" ]; then
-    echo "$POLICY" | python3 -c "
-import json,sys; p=json.load(sys.stdin)
-if 'error' in p: sys.exit(p['error']['message'])
-m=[x for b in p.get('bindings',[]) if b['role']=='roles/iap.httpsResourceAccessor' for x in b['members']]
-print('\n'.join(m) or '(nobody)')"
+    echo "$CURRENT" | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)) or '(nobody)')"
     exit
 fi
-[ -z "$EMAIL" ] && { echo "usage: $0 invite|revoke EMAIL"; exit 1; }
-NEW=$(echo "$POLICY" | ACTION="$ACTION" EMAIL="$EMAIL" python3 -c "
-import json,os,sys; p=json.load(sys.stdin)
-if 'error' in p: sys.exit(p['error']['message'])
-role='roles/iap.httpsResourceAccessor'; who='user:'+os.environ['EMAIL'].lower()
-b=next((b for b in p.setdefault('bindings',[]) if b['role']==role), None)
-if b is None: b={'role':role,'members':[]}; p['bindings'].append(b)
-if os.environ['ACTION']=='invite' and who not in b['members']: b['members'].append(who)
-if os.environ['ACTION']=='revoke' and who in b['members']: b['members'].remove(who)
-p['bindings']=[x for x in p['bindings'] if x['members']]
-print(json.dumps({'policy':p}))") || exit 1
-call setIamPolicy "$NEW" >/dev/null && echo "✓ $ACTION $EMAIL" && "$SELF" list
+case "$ACTION" in invite|revoke) ;; *) echo "usage: $0 list | invite EMAIL | revoke EMAIL"; exit 1 ;; esac
+[ -z "$EMAIL" ] && { echo "usage: $0 $ACTION EMAIL"; exit 1; }
+case "$EMAIL" in *@*.*) ;; *) echo "'$EMAIL' does not look like an email address"; exit 1 ;; esac
+
+echo "$CURRENT" | ACTION="$ACTION" EMAIL="$EMAIL" python3 -c "
+import json,os,sys
+emails=sorted({e.lower() for e in json.load(sys.stdin)})
+e=os.environ['EMAIL'].strip().lower()
+emails = sorted(set(emails)|{e}) if os.environ['ACTION']=='invite' else [x for x in emails if x!=e]
+print(json.dumps(emails))" | gcloud storage cp - "$FILE" >/dev/null && echo "✓ $ACTION $EMAIL" && "$(cd "$(dirname "$0")" && pwd)/dashboard_access.sh" list

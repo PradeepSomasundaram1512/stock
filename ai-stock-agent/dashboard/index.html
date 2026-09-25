@@ -50,7 +50,7 @@ a.t{color:var(--acc);cursor:pointer;text-decoration:none;font-weight:600}
 <div class="wrap">
 <header>
   <div><h1>Scanner Dashboard</h1><div class="mute small" id="asof">loading…</div></div>
-  <div><span class="badge" id="fresh">…</span> <button id="refresh">Refresh</button> <button id="theme">Theme</button></div>
+  <div><span class="badge" id="fresh">…</span> <span class="mute small" id="me"></span> <button id="refresh">Refresh</button> <button id="signout">Sign out</button> <button id="theme">Theme</button></div>
 </header>
 <div class="banner">Research and paper-trading tool. Nothing here is investment advice and no real orders are placed. Model output is often wrong; see the Scoreboard tab for how well it has actually done.</div>
 <div id="err"></div>
@@ -103,7 +103,7 @@ const usd = x => x == null ? "–" : (x < 0 ? "−$" : "$") + Math.abs(Number(x)
 const num = (x, d = 2) => x == null ? "–" : Number(x).toFixed(d);
 const NS = "http://www.w3.org/2000/svg";
 const mk = (t, a = {}, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
-async function get(p) { const r = await fetch(p); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j; }
+async function get(p) { const r = await fetch(p); if (r.status === 401) { location.reload(); throw new Error("signed out"); } const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j; }
 const kpi = (label, value, cls = "") => el("div", {className: "card kpi"}, el("div", {className: "v " + cls, textContent: value}), el("div", {className: "l", textContent: label}));
 const pill = d => d ? el("span", {className: "pill " + String(d).split(" ")[0], textContent: d}) : "–";
 const fail = e => { const b = $("#err"); b.style.display = "block"; b.textContent = "Could not load data: " + e.message; };
@@ -308,7 +308,8 @@ function showTab(name, force) {
 }
 function refresh() { $("#err").style.display = "none"; Object.keys(loaded).forEach(k => delete loaded[k]); $("#scanpick").replaceChildren(); loadContext().catch(fail); showTab(location.hash.slice(1) || "overview", true); }
 document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
-$("#refresh").onclick = refresh; $("#scanpick").onchange = () => pickScan().catch(fail); $("#tickgo").onclick = () => lookup().catch(fail); $("#csv").onclick = exportCsv;
+$("#refresh").onclick = refresh; $("#signout").onclick = async () => { await fetch("/auth/logout", {method: "POST"}); location.reload(); };
+fetch("/api/me").then(r => r.json()).then(j => { if (j.email && j.email !== "dev@localhost") $("#me").textContent = j.email; }).catch(() => {}); $("#scanpick").onchange = () => pickScan().catch(fail); $("#tickgo").onclick = () => lookup().catch(fail); $("#csv").onclick = exportCsv;
 $("#tickin").onkeydown = e => e.key === "Enter" && lookup().catch(fail);
 $("#theme").onclick = () => { const r = document.documentElement, d = getComputedStyle(r).getPropertyValue("--bg").trim() === "#0e1116"; r.dataset.theme = d ? "light" : "dark"; };
 window.onhashchange = () => showTab(location.hash.slice(1));

@@ -14,7 +14,8 @@ endpoints computed from the same files the scheduled jobs write to the GCS bucke
 
 It only ever READS (its service account has objectViewer on the bucket), so it cannot
 corrupt trading state. Files are re-downloaded at most every CACHE_TTL seconds.
-Access is controlled by Cloud Run IAM (deployed without public access).
+Access is invite-only Google sign-in implemented in auth.py (the service itself is publicly
+reachable, so EVERY page and API route except /healthz checks the session first).
 
 Env: DATA_BUCKET (required), PORT (default 8080), CACHE_TTL (default 120)
      DATA_DIR (optional): read local files instead of the bucket, for development.
@@ -33,6 +34,9 @@ from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 
 HERE = Path(__file__).parent
+import sys
+sys.path.insert(0, str(HERE))
+import auth
 CACHE = Path(os.environ.get("DATA_DIR") or "/tmp/dashboard-data")
 CACHE_TTL = int(os.environ.get("CACHE_TTL", "120"))
 FILES = ("backtest.db", "paper_trades.json", "swing_trades.json")
@@ -297,31 +301,84 @@ ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": histor
           "/api/arena": arena, "/api/scoreboard": scoreboard}
 
 
+DEV_NO_AUTH = os.environ.get("DASHBOARD_DEV_NO_AUTH") == "1" and bool(os.environ.get("DATA_DIR"))   # local only
+
+
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, code, body: bytes, ctype: str):
+    def _send(self, code, body: bytes, ctype: str, headers=()):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        for k, v in headers:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
+
+    def _json(self, code, obj, headers=()):
+        self._send(code, json.dumps(obj, default=str).encode(), "application/json", headers)
+
+    def _email(self):
+        """Signed-in, still-invited email for this request, or None."""
+        if DEV_NO_AUTH:
+            return "dev@localhost"
+        try:
+            return auth.read_session(auth.token_from_cookie(self.headers.get("Cookie", "")), auth.allowed_emails())
+        except RuntimeError:                       # SESSION_SECRET missing: fail closed
+            return None
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if path == "/auth/logout":
+            return self._json(200, {"ok": True}, [("Set-Cookie", auth.cookie_header("", 0))])
+        if path != "/auth/login":
+            return self._send(404, b"not found", "text/plain")
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+            if not 0 < n <= 8192:
+                return self._json(400, {"error": "bad request"})
+            cred = json.loads(self.rfile.read(n)).get("credential", "")
+        except Exception:                          # noqa: BLE001
+            return self._json(400, {"error": "bad request"})
+        email = auth.verify_google(cred)
+        if not email:
+            return self._json(401, {"error": "could not verify the Google sign-in"})
+        if email not in auth.allowed_emails():
+            print(f"auth: refused sign-in from a non-invited account", flush=True)
+            return self._json(403, {"error": "not invited"})
+        try:
+            token = auth.sign_session(email)
+        except RuntimeError:
+            return self._json(500, {"error": "server not configured"})
+        print(f"auth: signed in {email}", flush=True)
+        self._json(200, {"ok": True}, [("Set-Cookie", auth.cookie_header(token))])
 
     def do_GET(self):
         u = urlparse(self.path)
         path, query = u.path, {k: v[0] for k, v in parse_qs(u.query).items()}
         if path == "/healthz":
             return self._send(200, b"ok", "text/plain")
+        me = self._email()
         if path in ("/", "/index.html"):
-            return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if me:
+                return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            page = (HERE / "login.html").read_text().replace("__CLIENT_ID__", os.environ.get("GOOGLE_CLIENT_ID", ""))
+            return self._send(200, page.encode(), "text/html; charset=utf-8")
+        if not me:
+            return self._json(401, {"error": "sign in required"})
+        if path == "/api/me":
+            return self._json(200, {"email": me})
         fn = ROUTES.get(path)
         if not fn:
             return self._send(404, b"not found", "text/plain")
         try:
             refresh()
-            self._send(200, json.dumps(fn(query) if fn.__code__.co_argcount else fn(), default=str).encode(), "application/json")
+            self._json(200, fn(query) if fn.__code__.co_argcount else fn())
         except Exception as e:                       # noqa: BLE001 - report, never crash the server
-            self._send(500, json.dumps({"error": f"{type(e).__name__}: {e}"}).encode(), "application/json")
+            self._json(500, {"error": f"{type(e).__name__}: {e}"})
 
     def log_message(self, fmt, *args):
         print(f"{self.address_string()} {fmt % args}", flush=True)

@@ -356,20 +356,38 @@ decisions and the model's reasoning, per-day health and BUY-count charts, the pa
 cost if a quote is unavailable).
 It runs as its own service account with `objectViewer` only.
 
-**Access is Google sign-in via Cloud Run IAP, invite-only.** Anyone not on the list is sent to a Google login and
-then refused; there is no public access. Manage the list with
+## Dashboard sign-in
+
+Cloud Run's built-in IAP cannot be used for personal Gmail testers: its default Google-managed sign-in
+only admits identities inside the Google Cloud organization, so an invited `@gmail.com` account gets
+"You don't have access" even with the accessor role (verified: the IAM Policy Troubleshooter reports the
+grant as matched). So the dashboard does its own **invite-only Google sign-in** (`dashboard/auth.py`):
+
+1. The browser gets a Google ID token; the server verifies it (signature, expiry, audience, verified email).
+2. The email must be on the invite list, `gs://<project>-stock-dashboard-config/allowed_emails.json`.
+3. The server sets its own signed, HttpOnly, Secure, SameSite cookie (12 h). Every request re-checks the
+   list, so a revoked person loses access within about a minute. It fails closed on any misconfiguration.
+4. The service is public at the network level, so *every* page and API route except `/healthz` checks the
+   session first. `python dashboard/test_auth.py` covers forged, tampered, expired and revoked sessions.
+
+**One-time setup (needs the console; only the client ID is needed, never a secret):**
+
+1. Open <https://console.cloud.google.com/auth/overview?project=PROJECT_ID> and click *Get started*: app name
+   "Scanner Dashboard", your support email, audience **External**, contact email.
+2. *Audience*: leave publishing status **Testing** and add each invited person under *Test users*.
+3. *Clients* > *Create client* > **Web application**. Under *Authorized JavaScript origins* add the service URL
+   (`gcloud run services describe stock-dashboard --region=us-central1 --format="value(status.url)"`).
+   No redirect URI is needed. Copy the **Client ID** (`...apps.googleusercontent.com`).
+4. `GOOGLE_CLIENT_ID=<that id> ./deploy/gcp/06_deploy_dashboard.sh` (this also removes IAP and makes the URL public).
+
+Invite or revoke testers (also add them as Test users in step 2 while the app is in Testing):
 
     ./deploy/gcp/dashboard_access.sh list
     ./deploy/gcp/dashboard_access.sh invite tester@example.com
     ./deploy/gcp/dashboard_access.sh revoke tester@example.com
 
-Then send the tester the service URL (`gcloud run services describe stock-dashboard --region=us-central1
---format="value(status.url)"`). Setup notes: IAP needs the `iap` and `cloudresourcemanager` APIs, the annotation
-`run.googleapis.com/iap-enabled: 'true'` on the service, and `roles/run.invoker` for
-`service-<project number>@gcp-sa-iap.iam.gserviceaccount.com`. `gcloud run services proxy`
-no longer works: IAP redirects it to sign-in, so open the service URL in a browser instead.
-
-Local development: `DATA_DIR=/path/to/copies python dashboard/server.py`.
+Local development: `DATA_DIR=/path/to/copies DASHBOARD_DEV_NO_AUTH=1 python dashboard/server.py`
+(the auth bypass only works together with `DATA_DIR`, which Cloud Run never sets).
 
 ### Dashboard tabs
 

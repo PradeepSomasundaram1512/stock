@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Scanner Dashboard</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6675;--line:#e3e6ec;--bad:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8ebf0;--mute:#98a2b3;--line:#262c36;--bad:#ff6b6b}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px;max-width:380px;width:100%;text-align:center}
+h1{font-size:20px;margin:0 0 6px}p{color:var(--mute);margin:6px 0 18px;font-size:13px}
+#btn{display:flex;justify-content:center;min-height:44px}
+#msg{color:var(--bad);margin-top:14px;font-size:13px;min-height:18px}
+.small{font-size:11px;margin:18px 0 0}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Scanner Dashboard</h1>
+  <p>Invite-only. Sign in with the Google account that was invited.</p>
+  <div id="btn"></div>
+  <div id="msg"></div>
+  <p class="small">Research and paper-trading tool. Not investment advice.</p>
+</div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const CLIENT_ID = "__CLIENT_ID__", msg = document.getElementById("msg");
+async function onCredential(r) {
+  msg.textContent = "";
+  try {
+    const res = await fetch("/auth/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({credential: r.credential})});
+    if (res.ok) return location.reload();
+    msg.textContent = res.status === 403 ? "This Google account is not on the invite list." : "Sign-in failed. Please try again.";
+  } catch (e) { msg.textContent = "Could not reach the server."; }
+}
+window.onload = () => {
+  if (!CLIENT_ID || CLIENT_ID.startsWith("__")) { msg.textContent = "Sign-in is not configured yet."; return; }
+  const t = setInterval(() => { if (window.google && google.accounts) { clearInterval(t);
+    google.accounts.id.initialize({client_id: CLIENT_ID, callback: onCredential});
+    google.accounts.id.renderButton(document.getElementById("btn"), {theme: "outline", size: "large", text: "signin_with"}); } }, 100);
+};
+</script>
+</body>
+</html>
