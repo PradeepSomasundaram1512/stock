@@ -11,6 +11,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -300,13 +301,18 @@ This is NOT a day trade. The position opens today and targets an 8-15% move over
             prompt_text = self.decision_prompt.format(**inputs)
 
             # Get LLM decision
+            _t0 = time.time()
             response = self.llm.invoke([HumanMessage(content=prompt_text)])
+            _latency = round(time.time() - _t0, 2)
 
             # Parse JSON response
             decision_data = self._parse_response(response.content)
 
             # Validate and ensure consistency
             decision_data = self._validate_decision(decision_data, inputs)
+            decision_data['llm_status'] = 'ok'
+            decision_data['model'] = getattr(self.llm, 'model_name', None) or getattr(self.llm, 'model', None)
+            decision_data['latency_s'] = _latency
 
             logger.info(f"Autonomous decision for {ticker}: {decision_data['decision']} "
                        f"({decision_data['confidence']:.1%} confidence)")
@@ -324,7 +330,13 @@ This is NOT a day trade. The position opens today and targets an 8-15% move over
                 'time_horizon': 'unknown',
                 'price_target': None,
                 'stop_loss': None,
-                'alternative_action': 'Wait for system resolution'
+                'alternative_action': 'Wait for system resolution',
+                # marks this as the exception fallback, NOT a model decision — production
+                # once ran two months of these (exhausted OpenAI quota) with nothing to tell
+                # them apart from a real HOLD
+                'llm_status': 'fallback_error',
+                'error': str(e)[:300],
+                'model': getattr(self.llm, 'model_name', None) or getattr(self.llm, 'model', None),
             }
 
     def _prepare_inputs(

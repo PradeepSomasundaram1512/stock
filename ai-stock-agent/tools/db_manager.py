@@ -65,10 +65,104 @@ def migrate_schema():
             )
         """)
 
+        # Candidate-level log of EVERY analysis the LLM stage handled (BUY/SELL/HOLD and
+        # exception fallbacks), with the inputs it saw. `recommendations` only keeps the
+        # signals that survived ranking, so it cannot show what the model rejected, which
+        # decisions were fallbacks, or what news/fundamentals it was given.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS llm_decisions (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id          TEXT NOT NULL,
+                decided_at       TEXT NOT NULL,
+                ticker           TEXT NOT NULL,
+                llm_status       TEXT,
+                model            TEXT,
+                latency_s        REAL,
+                error            TEXT,
+                raw_decision     TEXT,
+                raw_confidence   REAL,
+                price_target     REAL,
+                stop_loss        REAL,
+                risk_level       TEXT,
+                time_horizon     TEXT,
+                key_factors      TEXT,
+                reasoning        TEXT,
+                price            REAL,
+                rsi              REAL,
+                trend            TEXT,
+                atr              REAL,
+                pre_rsi          REAL,
+                pre_vol_ratio    REAL,
+                pre_momentum_5h  REAL,
+                pre_interest     REAL,
+                pe_ratio         REAL,
+                valuation_score  REAL,
+                health_score     REAL,
+                growth_score     REAL,
+                news_sentiment   TEXT,
+                news_score       REAL,
+                news_count       INTEGER,
+                market_trend     TEXT,
+                final_decision   TEXT,
+                final_confidence REAL,
+                in_signal_list   INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_dec_scan ON llm_decisions(scan_id, ticker)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_dec_time ON llm_decisions(decided_at)")
+
         conn.commit()
         logger.info("Schema migration complete")
     except Exception as e:
         logger.error(f"Schema migration error: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+_LLM_DECISION_COLS = (
+    "scan_id", "decided_at", "ticker", "llm_status", "model", "latency_s", "error", "raw_decision",
+    "raw_confidence", "price_target", "stop_loss", "risk_level", "time_horizon", "key_factors",
+    "reasoning", "price", "rsi", "trend", "atr", "pre_rsi", "pre_vol_ratio", "pre_momentum_5h",
+    "pre_interest", "pe_ratio", "valuation_score", "health_score", "growth_score", "news_sentiment",
+    "news_score", "news_count", "market_trend",
+)
+
+
+def save_llm_decisions(rows: List[Dict[str, Any]]) -> int:
+    """Insert one row per analysed candidate. Never raises: logging must not break a scan."""
+    if not rows:
+        return 0
+    conn = get_connection()
+    try:
+        conn.executemany(
+            f"INSERT INTO llm_decisions ({','.join(_LLM_DECISION_COLS)}) VALUES ({','.join('?' * len(_LLM_DECISION_COLS))})",
+            [tuple(r.get(c) for c in _LLM_DECISION_COLS) for r in rows],
+        )
+        conn.commit()
+        return len(rows)
+    except Exception as e:
+        logger.error(f"save_llm_decisions failed: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        conn.close()
+
+
+def mark_final_signals(scan_id: str, finals: List[Dict[str, Any]]) -> None:
+    """Record the post-gate label/confidence for candidates that reached the ranked lists."""
+    if not finals:
+        return
+    conn = get_connection()
+    try:
+        conn.executemany(
+            "UPDATE llm_decisions SET final_decision=?, final_confidence=?, in_signal_list=1 "
+            "WHERE scan_id=? AND ticker=?",
+            [(f.get("decision"), (f.get("confidence") or 0) / 100, scan_id, f.get("ticker")) for f in finals],
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"mark_final_signals failed: {e}")
         conn.rollback()
     finally:
         conn.close()

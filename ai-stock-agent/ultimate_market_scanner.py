@@ -30,6 +30,7 @@ import sys
 import os
 import logging
 import argparse
+import json
 import time
 import threading
 import requests
@@ -191,6 +192,7 @@ SP500_ALL = [
 ]
 
 # Popular subset for quick scans (top 100 by market cap)
+SP500_ALL = list(dict.fromkeys(SP500_ALL))   # the literal above lists ~180 tickers more than once
 SP500_POPULAR = SP500_ALL[:100]
 
 
@@ -1104,6 +1106,41 @@ def send_gap_scan():
         logger.error(f"Gap scan error: {e}")
 
 
+def _decision_rows(results: List[Dict[str, Any]], prescreen_lookup: Dict, scan_id: str) -> List[Dict[str, Any]]:
+    """One flat row per analysed candidate for the llm_decisions table."""
+    def num(v):
+        try:
+            return None if v is None else float(v)
+        except (TypeError, ValueError):
+            return None
+
+    now = datetime.utcnow().isoformat()
+    rows = []
+    for r in results:
+        d = r.get('decision') or {}
+        f, fund = r.get('features') or {}, r.get('fundamentals') or {}
+        news, mkt = r.get('news_analysis') or {}, r.get('market_context') or {}
+        pre = (prescreen_lookup or {}).get(r.get('ticker')) or {}
+        rows.append({
+            'scan_id': scan_id, 'decided_at': now, 'ticker': r.get('ticker'),
+            'llm_status': d.get('llm_status', 'unknown'), 'model': d.get('model'),
+            'latency_s': num(d.get('latency_s')), 'error': d.get('error'),
+            'raw_decision': d.get('decision'), 'raw_confidence': num(d.get('confidence')),
+            'price_target': num(d.get('price_target')), 'stop_loss': num(d.get('stop_loss')),
+            'risk_level': d.get('risk_level'), 'time_horizon': d.get('time_horizon'),
+            'key_factors': json.dumps(d.get('key_factors') or []), 'reasoning': d.get('reasoning'),
+            'price': num(f.get('latest_price')), 'rsi': num(f.get('rsi')), 'trend': f.get('trend'),
+            'atr': num(f.get('atr')),
+            'pre_rsi': num(pre.get('rsi')), 'pre_vol_ratio': num(pre.get('vol_ratio')),
+            'pre_momentum_5h': num(pre.get('price_change_5h')), 'pre_interest': num(pre.get('interest_score')),
+            'pe_ratio': num(fund.get('pe_ratio')), 'valuation_score': num(fund.get('valuation_score')),
+            'health_score': num(fund.get('health_score')), 'growth_score': num(fund.get('growth_score')),
+            'news_sentiment': news.get('sentiment'), 'news_score': num(news.get('sentiment_score')),
+            'news_count': news.get('news_count'), 'market_trend': mkt.get('market_trend'),
+        })
+    return rows
+
+
 def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = None) -> Tuple[List[Dict], List[Dict], Dict]:
     """
     Scan the market and return top opportunities.
@@ -1211,6 +1248,15 @@ def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = No
         else:
             errors += 1
 
+    scan_id = datetime.utcnow().replace(microsecond=0).isoformat()
+    try:
+        from tools.db_manager import save_llm_decisions
+        n_logged = save_llm_decisions(_decision_rows(results, prescreen_lookup, scan_id))
+        n_fb = sum(1 for r in results if (r.get('decision') or {}).get('llm_status') == 'fallback_error')
+        logger.info(f"Logged {n_logged} candidate decisions ({n_fb} exception fallbacks)")
+    except Exception as e:  # logging must never break a scan
+        logger.warning(f"Could not log candidate decisions: {e}")
+
     elapsed = time.time() - scan_start
     logger.info(
         f"✓ Scan complete in {elapsed:.0f}s — "
@@ -1246,6 +1292,11 @@ def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = No
     # Rank opportunities (pass pre-screen lookup + market context for regime filter)
     top_buys, top_sells = rank_opportunities(results, prescreen_lookup, mkt_ctx)
     logger.info(f"Signals: {len(top_buys)} BUY, {len(top_sells)} SELL")
+    try:
+        from tools.db_manager import mark_final_signals
+        mark_final_signals(scan_id, list(top_buys) + list(top_sells))
+    except Exception as e:
+        logger.warning(f"Could not mark final signals: {e}")
 
     scan_stats = {
         'universe': total_universe,
