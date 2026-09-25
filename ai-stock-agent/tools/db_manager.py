@@ -103,11 +103,45 @@ def migrate_schema():
                 news_score       REAL,
                 news_count       INTEGER,
                 market_trend     TEXT,
+                tokens_in        INTEGER,
+                tokens_out       INTEGER,
                 final_decision   TEXT,
                 final_confidence REAL,
                 in_signal_list   INTEGER DEFAULT 0
             )
         """)
+        existing_ld = {row[1] for row in conn.execute("PRAGMA table_info(llm_decisions)")}
+        for col_name, col_def in (("tokens_in", "INTEGER"), ("tokens_out", "INTEGER")):
+            if col_name not in existing_ld:
+                conn.execute(f"ALTER TABLE llm_decisions ADD COLUMN {col_name} {col_def}")
+
+        # Shadow model: a second model answers the SAME prompt with the SAME stored inputs as
+        # the production model, logged here only. It never touches alerts or trading.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shadow_decisions (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id          TEXT NOT NULL,
+                decided_at       TEXT NOT NULL,
+                ticker           TEXT NOT NULL,
+                shadow_model     TEXT NOT NULL,
+                llm_status       TEXT,
+                latency_s        REAL,
+                error            TEXT,
+                decision         TEXT,
+                confidence       REAL,
+                price_target     REAL,
+                stop_loss        REAL,
+                risk_level       TEXT,
+                time_horizon     TEXT,
+                key_factors      TEXT,
+                reasoning        TEXT,
+                tokens_in        INTEGER,
+                tokens_out       INTEGER,
+                est_cost_usd     REAL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_scan ON shadow_decisions(scan_id, ticker)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_time ON shadow_decisions(decided_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_dec_scan ON llm_decisions(scan_id, ticker)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_llm_dec_time ON llm_decisions(decided_at)")
 
@@ -125,7 +159,7 @@ _LLM_DECISION_COLS = (
     "raw_confidence", "price_target", "stop_loss", "risk_level", "time_horizon", "key_factors",
     "reasoning", "price", "rsi", "trend", "atr", "pre_rsi", "pre_vol_ratio", "pre_momentum_5h",
     "pre_interest", "pe_ratio", "valuation_score", "health_score", "growth_score", "news_sentiment",
-    "news_score", "news_count", "market_trend",
+    "news_score", "news_count", "market_trend", "tokens_in", "tokens_out",
 )
 
 
@@ -145,6 +179,48 @@ def save_llm_decisions(rows: List[Dict[str, Any]]) -> int:
         logger.error(f"save_llm_decisions failed: {e}")
         conn.rollback()
         return 0
+    finally:
+        conn.close()
+
+
+_SHADOW_COLS = (
+    "scan_id", "decided_at", "ticker", "shadow_model", "llm_status", "latency_s", "error", "decision",
+    "confidence", "price_target", "stop_loss", "risk_level", "time_horizon", "key_factors", "reasoning",
+    "tokens_in", "tokens_out", "est_cost_usd",
+)
+
+
+def save_shadow_decisions(rows: List[Dict[str, Any]]) -> int:
+    """Insert shadow-model rows. Never raises."""
+    if not rows:
+        return 0
+    conn = get_connection()
+    try:
+        conn.executemany(
+            f"INSERT INTO shadow_decisions ({','.join(_SHADOW_COLS)}) VALUES ({','.join('?' * len(_SHADOW_COLS))})",
+            [tuple(r.get(c) for c in _SHADOW_COLS) for r in rows],
+        )
+        conn.commit()
+        return len(rows)
+    except Exception as e:
+        logger.error(f"save_shadow_decisions failed: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        conn.close()
+
+
+def shadow_spent_today_usd() -> float:
+    """Estimated shadow spend so far today (UTC), summed from what was actually logged."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(est_cost_usd), 0) FROM shadow_decisions WHERE date(decided_at) = date('now')"
+        ).fetchone()
+        return float(row[0] or 0.0)
+    except Exception as e:
+        logger.error(f"shadow_spent_today_usd failed: {e}")
+        return float("inf")     # unknown spend -> behave as if the budget is gone
     finally:
         conn.close()
 

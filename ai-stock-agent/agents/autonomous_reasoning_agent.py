@@ -22,7 +22,8 @@ class AutonomousReasoningAgent:
     Designed for users with no stock market expertise.
     """
 
-    def __init__(self, model_type: str = "openai", model_name: Optional[str] = None, swing_mode: bool = False):
+    def __init__(self, model_type: str = "openai", model_name: Optional[str] = None, swing_mode: bool = False,
+                 temperature: Optional[float] = 0.3):
         """
         Initialize the Autonomous Reasoning Agent.
 
@@ -30,21 +31,24 @@ class AutonomousReasoningAgent:
             model_type: "openai" or "anthropic"
             model_name: Specific model name (optional)
             swing_mode: If True, use weekly swing trading prompt (5-10 day holds, 8-15% targets)
+            temperature: sampling temperature; None omits it (reasoning models such as the
+                GPT-6 family reject any value other than their default)
         """
         self.model_type = model_type
         self.swing_mode = swing_mode
 
+        temp_kw = {} if temperature is None else {"temperature": temperature}
         if model_type == "openai":
             self.llm = ChatOpenAI(
                 model=model_name or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                temperature=0.3,
-                api_key=os.getenv("OPENAI_API_KEY")
+                api_key=os.getenv("OPENAI_API_KEY"),
+                **temp_kw
             )
         else:
             self.llm = ChatAnthropic(
                 model=model_name or os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
-                temperature=0.3,
-                api_key=os.getenv("ANTHROPIC_API_KEY")
+                api_key=os.getenv("ANTHROPIC_API_KEY"),
+                **temp_kw
             )
 
         self.decision_prompt = self._create_swing_prompt() if swing_mode else self._create_decision_prompt()
@@ -313,6 +317,9 @@ This is NOT a day trade. The position opens today and targets an 8-15% move over
             decision_data['llm_status'] = 'ok'
             decision_data['model'] = getattr(self.llm, 'model_name', None) or getattr(self.llm, 'model', None)
             decision_data['latency_s'] = _latency
+            _usage = getattr(response, 'usage_metadata', None) or {}
+            decision_data['tokens_in'] = _usage.get('input_tokens')
+            decision_data['tokens_out'] = _usage.get('output_tokens')
 
             logger.info(f"Autonomous decision for {ticker}: {decision_data['decision']} "
                        f"({decision_data['confidence']:.1%} confidence)")

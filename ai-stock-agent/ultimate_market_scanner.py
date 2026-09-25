@@ -1106,6 +1106,10 @@ def send_gap_scan():
         logger.error(f"Gap scan error: {e}")
 
 
+# Candidates of the most recent scan_market() call, handed to the shadow runner after the alert is sent.
+_LAST_SCAN: Optional[Dict[str, Any]] = None
+
+
 def _decision_rows(results: List[Dict[str, Any]], prescreen_lookup: Dict, scan_id: str) -> List[Dict[str, Any]]:
     """One flat row per analysed candidate for the llm_decisions table."""
     def num(v):
@@ -1137,6 +1141,7 @@ def _decision_rows(results: List[Dict[str, Any]], prescreen_lookup: Dict, scan_i
             'health_score': num(fund.get('health_score')), 'growth_score': num(fund.get('growth_score')),
             'news_sentiment': news.get('sentiment'), 'news_score': num(news.get('sentiment_score')),
             'news_count': news.get('news_count'), 'market_trend': mkt.get('market_trend'),
+            'tokens_in': d.get('tokens_in'), 'tokens_out': d.get('tokens_out'),
         })
     return rows
 
@@ -1256,6 +1261,8 @@ def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = No
         logger.info(f"Logged {n_logged} candidate decisions ({n_fb} exception fallbacks)")
     except Exception as e:  # logging must never break a scan
         logger.warning(f"Could not log candidate decisions: {e}")
+    global _LAST_SCAN
+    _LAST_SCAN = {"scan_id": scan_id, "results": results}
 
     elapsed = time.time() - scan_start
     logger.info(
@@ -1830,6 +1837,14 @@ def _do_scan():
             color=0x0099ff,
             webhook_url=webhook
         )
+
+    # Shadow model (off unless SHADOW_MODEL is set): runs only now, after the production alert has
+    # gone out, so it can never delay it; it logs to shadow_decisions and never affects anything else.
+    try:
+        import shadow
+        shadow.run_shadow(_LAST_SCAN)
+    except Exception as e:
+        logger.warning(f"Shadow run skipped: {e}")
 
     logger.info("✓ Scan completed")
     logger.info("=" * 70)

@@ -253,6 +253,39 @@ before the container runs (image pull, OOM-kill) are not, so still glance at
 in `gs://<project>-stock-scanner-archive/`, deliberately outside the synced
 data bucket. The live `backtest.db` already contains the merged history.
 
+## 🧪 Shadow model (forward model comparison)
+
+A second LLM answers the *same prompt on the same stored inputs* as the production
+model for every candidate of the hourly scan, and its answer is only logged
+(`shadow_decisions` table, joined to `llm_decisions` on `scan_id, ticker`). It never
+reaches alerts, rankings or trading. It exists to answer, forward and cleanly, whether
+a newer/stronger model chooses better than the deployed 2024 one.
+
+It shares an OpenAI account with production, which once ran out of quota (see the
+fallback-alert section), so it is built to be unable to hurt it and to stay cheap:
+
+| Guard | Behaviour |
+|---|---|
+| Off switch | disabled unless `SHADOW_MODEL` is set; a model with no known price is refused |
+| Daily cap | `SHADOW_DAILY_BUDGET_USD` (default **$0.25**), summed from actual token usage already logged today, so it holds across separate job executions |
+| Never delays alerts | runs after the production Discord alert has been sent |
+| Health check | skipped for a scan if >=10% of production calls failed |
+| Circuit breaker | stops for the scan after 3 consecutive failures |
+
+Measured on real prompts (about 1,300 input / 450-520 output tokens including hidden
+reasoning; official prices, Sept 2026):
+
+| Model | Per decision | ~240 decisions/day | Per month |
+|---|---|---|---|
+| gpt-6-luna (default) | ~$0.0004 | ~$0.10 | ~$2 |
+| gpt-6-sol | ~$0.007 | ~$1.70 | ~$37 |
+| gpt-6-astra | ~$0.036 | ~$8.60 | ~$190 |
+
+Change or disable it at deploy time (`SHADOW_MODEL= ./deploy/gcp/04_deploy_job.sh`
+disables; raise `SHADOW_DAILY_BUDGET_USD` if you pick a pricier model or the cap will
+bind). GPT-6 models reject a non-default temperature, so the shadow agent omits it.
+Read results with `venv/bin/python shadow_report.py <backtest.db>`.
+
 ## 🆘 Troubleshooting
 
 **Job execution fails immediately** — check logs (above). Most common cause:
