@@ -1133,7 +1133,7 @@ def _decision_rows(results: List[Dict[str, Any]], prescreen_lookup: Dict, scan_i
         pre = (prescreen_lookup or {}).get(r.get('ticker')) or {}
         rows.append({
             'scan_id': scan_id, 'decided_at': now, 'ticker': r.get('ticker'),
-            'llm_status': d.get('llm_status', 'unknown'), 'model': d.get('model'),
+            'llm_status': d.get('llm_status', 'unknown'), 'model': d.get('model'), 'model_snapshot': d.get('model_snapshot'),
             'latency_s': num(d.get('latency_s')), 'error': d.get('error'),
             'raw_decision': d.get('decision'), 'raw_confidence': num(d.get('confidence')),
             'price_target': num(d.get('price_target')), 'stop_loss': num(d.get('stop_loss')),

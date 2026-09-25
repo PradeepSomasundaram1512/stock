@@ -47,13 +47,22 @@ NEUTRAL = {
 }
 VARIANTS = {"no_news": ["news"], "no_fundamentals": ["fundamentals"], "no_market": ["market"], "no_technical": ["technical"],
             "technical_only": ["news", "fundamentals", "market"]}
+# Robustness: the neutral text above ("neutral", "N/A") is not information-free, so a shift could be an artifact of the wording. These two re-run the
+# key ablations with different wording ("Not provided"); an effect that survives both is about the missing input, not the words.
+ALT = {"no_news_alt": ["news"], "no_technical_alt": ["technical"]}
+ALL_VARIANTS = {**VARIANTS, **ALT}
+NOT_PROVIDED = {
+    "news": {"news_count": "not provided", "news_sentiment": "NOT PROVIDED", "news_topics": "not provided", "news_summary": "Not provided"},
+    "technical": {"trend": "not provided", "rsi_signal": "not provided", "macd_signal": "not provided", "volume_signal": "not provided",
+                  "volatility_level": "not provided", "support_resistance": "not provided", "technical_summary": "Not provided"},
+}
 
 
-def neutralise(prompt_inputs: dict, groups: list, sector_default: str = "No sector data available") -> dict:
-    """Copy of the prompt inputs with the given groups replaced by the neutral text used for missing data."""
+def neutralise(prompt_inputs: dict, groups: list, sector_default: str = "No sector data available", alt: bool = False) -> dict:
+    """Copy of the prompt inputs with the given groups replaced by the neutral text used for missing data (or the alternative wording)."""
     out = dict(prompt_inputs)
     for g in groups:
-        out.update(NEUTRAL[g])
+        out.update((NOT_PROVIDED if alt else NEUTRAL)[g])
         if g == "market":
             out["sector_performance"] = sector_default
     return out
@@ -71,11 +80,11 @@ def replay(agent, row: dict, variant: str) -> dict:
         from langchain_core.messages import HumanMessage
     except ImportError:                     # tests and CI run without langchain; a stub model only needs `.content`
         from types import SimpleNamespace as HumanMessage
-    inp, groups = row["inputs"], ([] if variant.startswith("control") else VARIANTS[variant])
+    inp, groups = row["inputs"], ([] if variant.startswith("control") else ALL_VARIANTS[variant])
     prepared = agent._prepare_inputs(row["ticker"], {"features": inp.get("features") or {}, "rag_context": inp.get("rag_context")},
                                      inp.get("fundamentals") or {}, inp.get("news_analysis") or {}, inp.get("market_context") or {})
     sector_default = agent._format_sector_perf(prepared.get("sector", "Unknown"), {})
-    prompt = agent.decision_prompt.format(**neutralise(prepared, groups, sector_default))
+    prompt = agent.decision_prompt.format(**neutralise(prepared, groups, sector_default, alt=variant.endswith("_alt")))
     t0 = time.time()
     resp = agent.llm.invoke([HumanMessage(content=prompt)])
     raw = agent._parse_response(resp.content)
@@ -112,7 +121,7 @@ def run(fraction: float = 0.25, limit: int = None, budget_usd: float = 1.5, data
         agent = get_autonomous_reasoning_agent()
     rows = [r for r in input_log.read_all(data_dir) if sampled(r["scan_id"], r["ticker"], fraction)]
     done = done_keys(data_dir)
-    todo = [(r, v) for r in rows for v in (*CONTROLS, *VARIANTS) if (r["scan_id"], r["ticker"], v) not in done]
+    todo = [(r, v) for r in rows for v in (*CONTROLS, *ALL_VARIANTS) if (r["scan_id"], r["ticker"], v) not in done]
     if limit:
         todo = todo[:limit]
     out_path = Path(data_dir) / "ablation" / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.jsonl.gz"
@@ -172,7 +181,8 @@ def analyze(results: dict) -> dict:
         return out
     dec = lambda v: [full[k][v]["d"] for k in keys]
     base = np.array(dec("control_1"))
-    for v in (*CONTROLS[1:], *VARIANTS):
+    present_alt = [v for v in ALT if all(v in full[k] for k in keys)]
+    for v in (*CONTROLS[1:], *VARIANTS, *present_alt):
         arr = np.array(dec(v))
         agree = (arr == base).astype(float)
         m, lo, hi = _boot(agree)
@@ -182,7 +192,7 @@ def analyze(results: dict) -> dict:
                               "flips_to_buy": int(((arr == "BUY") & (base != "BUY")).sum()), "flips_from_buy": int(((arr != "BUY") & (base == "BUY")).sum())}
     noise = np.mean([out["variants"][c]["agree"] for c in CONTROLS[1:]])
     out["noise_floor_agree"] = float(noise)
-    for v in VARIANTS:                      # a variant matters only if its agreement interval lies BELOW the noise floor
+    for v in (*VARIANTS, *present_alt):     # a variant matters only if its agreement interval lies BELOW the noise floor
         out["variants"][v]["beyond_noise"] = bool(out["variants"][v]["hi"] < noise)
     return out
 
@@ -250,7 +260,7 @@ def weekly(discord: bool = False, data_dir: Path = DATA) -> dict:
         if url and a.get("n_candidates"):
             lines = [f"{a['n_candidates']} candidates replayed; noise floor {a['noise_floor_agree'] * 100:.0f}% agreement between identical runs; spent ${r['spent_usd']:.2f} this week"]
             for v, x in a["variants"].items():
-                if v in VARIANTS:
+                if v in ALL_VARIANTS:
                     lines.append(f"{v}: {x['agree'] * 100:.0f}% agree, BUY rate {x['buy_rate'] * 100:.0f}% vs {x['buy_rate_control'] * 100:.0f}%" + (" **beyond noise**" if x.get("beyond_noise") else ""))
             try:
                 requests.post(url, json={"embeds": [{"title": "Weekly input ablation", "description": "\n".join(lines), "color": 0x5865F2}]}, timeout=10)
@@ -261,9 +271,12 @@ def weekly(discord: bool = False, data_dir: Path = DATA) -> dict:
 
 def write_tex(a: dict):
     """LaTeX for the paper (paper/results_ablation.tex) from the analysis, so numbers cannot drift from the code."""
-    names = {"no_news": "No news", "no_fundamentals": "No fundamentals", "no_market": "No market context", "no_technical": "No technicals", "technical_only": "Technicals only"}
+    names = {"no_news": "No news", "no_news_alt": "No news (other wording)", "no_fundamentals": "No fundamentals", "no_market": "No market context",
+             "no_technical": "No technicals", "no_technical_alt": "No technicals (other wording)", "technical_only": "Technicals only"}
     rows = []
     for v, n in names.items():
+        if v not in a["variants"]:
+            continue
         r = a["variants"][v]
         rows.append(f"{n} & {r['agree'] * 100:.0f} [{r['lo'] * 100:.0f},{r['hi'] * 100:.0f}] & {r['buy_rate'] * 100:.0f} & {r['flips_to_buy']} / {r['flips_from_buy']} \\\\ ")
     ctl = a["variants"]["control_2"]["buy_rate_control"]

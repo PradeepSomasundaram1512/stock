@@ -316,6 +316,8 @@ This is NOT a day trade. The position opens today and targets an 8-15% move over
             decision_data = self._validate_decision(decision_data, inputs)
             decision_data['llm_status'] = 'ok'
             decision_data['model'] = getattr(self.llm, 'model_name', None) or getattr(self.llm, 'model', None)
+            # the exact snapshot the API served (an alias like "gpt-4o-mini" can point to different snapshots over time)
+            decision_data['model_snapshot'] = (getattr(response, 'response_metadata', None) or {}).get('model_name')
             decision_data['latency_s'] = _latency
             _usage = getattr(response, 'usage_metadata', None) or {}
             decision_data['tokens_in'] = _usage.get('input_tokens')

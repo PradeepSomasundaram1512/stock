@@ -68,8 +68,9 @@ def boot(df: pd.DataFrame, stat):
     draws = draws[np.isfinite(draws)]
     est = stat(df)
     se = draws.std(ddof=1)
+    p = max(2 * min((draws <= 0).mean(), (draws >= 0).mean()), 1 / len(draws))
     return {"est": float(est), "lo": float(np.percentile(draws, 2.5)), "hi": float(np.percentile(draws, 97.5)),
-            "se": float(se), "mde": float(2.8 * se), "detectable": bool(np.percentile(draws, 2.5) > 0 or np.percentile(draws, 97.5) < 0)}
+            "se": float(se), "mde": float(2.8 * se), "p": float(p), "detectable": bool(np.percentile(draws, 2.5) > 0 or np.percentile(draws, 97.5) < 0)}
 
 
 def analyse(df: pd.DataFrame, label: str) -> dict:
@@ -94,6 +95,8 @@ def analyse(df: pd.DataFrame, label: str) -> dict:
         ok = a.notna()
         return a[ok & (d.rsi <= d.rsi.quantile(0.30))].mean() - a[ok].mean()
     out["H5_lowrsi30_minus_all"] = boot(df, h5)
+    fam = {k: out[k]["p"] for k in ("H1_gated_minus_all", "H2_spearman_conf_car", "H3_reversal_minus_universe", "H4_llm_minus_reversal", "H5_lowrsi30_minus_all")}
+    out["holm_adjusted_p"] = pa.holm(fam)                    # across the five pre-registered hypotheses
     return out
 
 

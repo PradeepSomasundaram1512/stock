@@ -432,12 +432,12 @@ def macros(o):
         # regime and calibration tables as ready-made rows
         f.write("\\newcommand{\\regimeRows}{%\n")
         for r in o["regimes"]:
-            f.write(f"{r['regime'].replace('<', '$<$').replace('>', '$>$')} & {r['n']} & {pc(r['car10'])} & "
-                    f"{pc(r['alpha'])} & [{100 * r['lo']:+.2f}, {100 * r['hi']:+.2f}] & {pv(r)} \\\\\n")
+            f.write(f"{r['regime'].replace('<', '$<$').replace('>', '$>$')} & {r['n']} & ${pc(r['car10'])}$ & "
+                    f"${pc(r['alpha'])}$ & $[{100 * r['lo']:+.2f}, {100 * r['hi']:+.2f}]$ & {pv(r)} \\\\\n")
         f.write("}\n\\newcommand{\\calibRows}{%\n")
         for r in C["table"]:
             f.write(f"${r['cbin'].replace('1.01)', '1.0]')}$ & {r['n']} & {r['conf']:.2f} & {pu(r['win'])} & "
-                    f"{pu(r['succ'])} & {pc(r['alpha'])} \\\\\n")
+                    f"{pu(r['succ'])} & ${pc(r['alpha'])}$ \\\\\n")
         f.write("}\n")
 
 

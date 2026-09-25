@@ -1,0 +1,33 @@
+{
+ "n_sets": 500,
+ "n_blocks": 15,
+ "n_signals": 1399,
+ "placebo_bias_of_random_oversold_picks": 0.002651998600230419,
+ "sd_of_mean_alpha_under_null": 0.0018574755687578318,
+ "empirical_mde_2p8sd": 0.005200931592521929,
+ "real_llm_delta": -0.001304379571833788,
+ "real_llm_percentile_among_random_pickers": 0.02,
+ "rejection_rate_centred": {
+  "percentile block bootstrap": {
+   "0.0": 0.034,
+   "0.005": 0.626,
+   "0.01": 0.992,
+   "0.015": 1.0,
+   "0.02": 1.0
+  },
+  "cluster-robust t": {
+   "0.0": 0.024,
+   "0.005": 0.526,
+   "0.01": 0.98,
+   "0.015": 1.0,
+   "0.02": 1.0
+  },
+  "sign-flip permutation": {
+   "0.0": 0.014,
+   "0.005": 0.462,
+   "0.01": 0.976,
+   "0.015": 1.0,
+   "0.02": 1.0
+  }
+ }
+}

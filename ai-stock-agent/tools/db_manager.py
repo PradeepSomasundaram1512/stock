@@ -111,7 +111,7 @@ def migrate_schema():
             )
         """)
         existing_ld = {row[1] for row in conn.execute("PRAGMA table_info(llm_decisions)")}
-        for col_name, col_def in (("tokens_in", "INTEGER"), ("tokens_out", "INTEGER")):
+        for col_name, col_def in (("tokens_in", "INTEGER"), ("tokens_out", "INTEGER"), ("model_snapshot", "TEXT")):
             if col_name not in existing_ld:
                 conn.execute(f"ALTER TABLE llm_decisions ADD COLUMN {col_name} {col_def}")
 
@@ -160,6 +160,7 @@ _LLM_DECISION_COLS = (
     "reasoning", "price", "rsi", "trend", "atr", "pre_rsi", "pre_vol_ratio", "pre_momentum_5h",
     "pre_interest", "pe_ratio", "valuation_score", "health_score", "growth_score", "news_sentiment",
     "news_score", "news_count", "market_trend", "tokens_in", "tokens_out",
+    "model_snapshot",
 )
 
 

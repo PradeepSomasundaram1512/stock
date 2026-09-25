@@ -481,3 +481,14 @@ decision in a similar setup (RSI within 8, same trend), at about the same confid
 `paper_results/daily_panel_*.pkl.gz` is the frozen raw price download used by `paper_analysis.py`, `paper_baselines.py` and
 `forward_test.py walkforward` (`audit_core.load_panel(..., cache_dir=...)`). Yahoo revises adjusted prices slightly between downloads, which
 used to make the portfolio-rule row wobble between runs; with the frozen file two runs are byte-identical. The live forward test never uses a cache.
+
+## Validating the audit, and the model snapshot
+
+- `paper_power.py` validates the paper's inference by Monte Carlo on the real price panel: 500 fake LLMs pick random oversold stocks (no skill) and are
+  compared with the same matched placebo, giving false-positive rates and power for the percentile bootstrap, a cluster-robust t and a sign-flip test.
+  It also measures the placebo's bias for oversold picks (about +0.27 pp). `paper_sensitivity.py` repeats the comparison under six placebo designs.
+  Both write LaTeX for the paper (`paper/results_power.tex`, `paper/results_sensitivity.tex`).
+- `llm_decisions.model_snapshot` now records the exact model snapshot the API served (the alias `gpt-4o-mini` can point to different snapshots over
+  time; on 2026-09-25 it resolved to `gpt-4o-mini-2024-07-18`). The column is added automatically by `migrate_schema()`.
+- `ablation.py` also replays the two key ablations with different replacement wording, so an effect can be told apart from an artifact of the words.
+- `paper_results/osf_preregistration.md` is ready to paste into an external registry (OSF / AsPredicted) for an independent timestamp.

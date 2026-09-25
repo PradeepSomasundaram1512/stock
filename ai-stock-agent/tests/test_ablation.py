@@ -76,6 +76,14 @@ class NeutraliseTests(unittest.TestCase):
                 self.assertIn(k, p, f"{v} should keep {k}")
         self.assertIn("no sector data", self.prompt("no_market"))
 
+    def test_alternative_wording_removes_the_same_information_with_different_words(self):
+        for base, alt in (("no_news", "no_news_alt"), ("no_technical", "no_technical_alt")):
+            pb, pa = self.prompt(base), self.prompt(alt)
+            for needle in ("NEWSSUM", "buyback", "TECHSUM", "oversold"):
+                self.assertEqual(needle in pb, needle in pa)                        # the same facts are gone
+            self.assertIn("not provided", pa.lower())
+            self.assertNotEqual(pb, pa)                                              # but the replacement wording differs
+
     def test_sampling_is_deterministic_and_roughly_the_right_size(self):
         picks = [ab.sampled("scan", f"T{i}", 0.25) for i in range(4000)]
         self.assertEqual(picks, [ab.sampled("scan", f"T{i}", 0.25) for i in range(4000)])
@@ -91,7 +99,7 @@ class RunTests(unittest.TestCase):
     def test_replays_every_variant_then_is_resumable(self):
         a = StubAgent()
         r = ab.run(fraction=1.0, data_dir=self.d, agent=a, workers=1)
-        self.assertEqual((r["replayed"], r["errors"]), (2 * (3 + len(ab.VARIANTS)), 0))            # 2 candidates x (3 controls + 5 variants)
+        self.assertEqual((r["replayed"], r["errors"]), (2 * (3 + len(ab.ALL_VARIANTS)), 0))            # 2 candidates x (3 controls + 5 variants)
         again = ab.run(fraction=1.0, data_dir=self.d, agent=StubAgent(), workers=1)
         self.assertEqual(again["replayed"], 0)                                                     # nothing is replayed twice
 
@@ -103,13 +111,13 @@ class RunTests(unittest.TestCase):
         r = ab.run(fraction=1.0, data_dir=self.d, agent=StubAgent(), workers=1, max_seconds=-1)
         self.assertEqual((r["replayed"], r["stopped"]), (0, "time"))
         again = ab.run(fraction=1.0, data_dir=self.d, agent=StubAgent(), workers=1)
-        self.assertEqual(again["replayed"], 2 * (3 + len(ab.VARIANTS)))                            # nothing was lost by stopping early
+        self.assertEqual(again["replayed"], 2 * (3 + len(ab.ALL_VARIANTS)))                            # nothing was lost by stopping early
 
     def test_errors_are_recorded_not_fatal(self):
         a = StubAgent()
         a.llm = SimpleNamespace(invoke=lambda m: (_ for _ in ()).throw(RuntimeError("quota")))
         r = ab.run(fraction=1.0, data_dir=self.d, agent=a, workers=1)
-        self.assertEqual((r["replayed"], r["errors"]), (0, 16))
+        self.assertEqual((r["replayed"], r["errors"]), (0, 2 * (3 + len(ab.ALL_VARIANTS))))
 
 
 class AnalyzeTests(unittest.TestCase):

@@ -17,9 +17,9 @@ jobs:
         with:
           node-version: "22"
       - name: Install the cloud image's light dependencies
-        run: pip install pandas numpy yfinance requests google-auth google-cloud-storage scikit-learn
+        run: pip install pandas numpy yfinance requests google-auth google-cloud-storage scikit-learn scipy
       - name: Python compiles
-        run: python -m compileall -q audit_core.py forward_test.py market_snapshot.py scan_universe.py track_record.py daily_digest.py shadow.py input_log.py ablation.py meta_label.py dashboard tests deploy/gcp
+        run: python -m compileall -q audit_core.py forward_test.py market_snapshot.py scan_universe.py track_record.py daily_digest.py shadow.py input_log.py ablation.py meta_label.py paper_power.py paper_sensitivity.py dashboard tests deploy/gcp
       - name: Shell scripts parse
         run: for f in entrypoint.sh deploy/gcp/*.sh; do bash -n "$f" || exit 1; done
       - name: Dashboard JavaScript parses
@@ -40,3 +40,5 @@ jobs:
         run: python tests/test_ablation.py
       - name: Meta-labeling tests
         run: python tests/test_meta_label.py
+      - name: Audit-core tests
+        run: python tests/test_audit_core.py

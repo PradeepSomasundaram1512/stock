@@ -88,3 +88,13 @@ def car_path(P, i, t):
 def valid(P, i, t):
     return (t in P["C"].columns and i + H < len(P["C"]) and
             not np.isnan(P["C"][t].values[i:i + H + 1]).any() and not np.isnan(P["rsi"][t].iloc[i]))
+
+
+def holm(pvals: dict) -> dict:
+    """Holm step-down adjusted p-values (monotone, capped at 1) for a family of tests."""
+    order = sorted(pvals, key=pvals.get)
+    m, adj, run = len(order), {}, 0.0
+    for k, name in enumerate(order):
+        run = max(run, min(1.0, (m - k) * pvals[name]))
+        adj[name] = run
+    return adj

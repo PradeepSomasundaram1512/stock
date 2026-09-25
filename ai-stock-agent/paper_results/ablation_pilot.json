@@ -76,6 +76,28 @@
    "flips_to_buy": 1,
    "flips_from_buy": 4,
    "beyond_noise": false
+  },
+  "no_news_alt": {
+   "agree": 0.868421052631579,
+   "lo": 0.7631578947368421,
+   "hi": 0.9736842105263158,
+   "buy_rate": 0.07894736842105263,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": -0.0368421052631579,
+   "flips_to_buy": 1,
+   "flips_from_buy": 3,
+   "beyond_noise": false
+  },
+  "no_technical_alt": {
+   "agree": 0.5789473684210527,
+   "lo": 0.42105263157894735,
+   "hi": 0.7368421052631579,
+   "buy_rate": 0.47368421052631576,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": 0.10394736842105264,
+   "flips_to_buy": 13,
+   "flips_from_buy": 0,
+   "beyond_noise": true
   }
  },
  "noise_floor_agree": 0.9342105263157894

@@ -1,0 +1,65 @@
+{
+ "n_sets": 150,
+ "variants": {
+  "base (K=10)": {
+   "n_signals": 1399,
+   "llm_delta": -0.0013321797427031695,
+   "lo": -0.011691320777154336,
+   "hi": 0.009431587567164171,
+   "random_picker_delta": 0.0026097534084113818,
+   "random_picker_sd": 0.001942424204512997,
+   "llm_minus_bias": -0.003941933151114551,
+   "llm_below_share_of_random_pickers": 0.96
+  },
+  "K=5": {
+   "n_signals": 1399,
+   "llm_delta": -0.0007724302084779121,
+   "lo": -0.009786806178100916,
+   "hi": 0.00934383945504136,
+   "random_picker_delta": 0.0016426011373339327,
+   "random_picker_sd": 0.0020152955763122643,
+   "llm_minus_bias": -0.0024150313458118446,
+   "llm_below_share_of_random_pickers": 0.88
+  },
+  "K=20": {
+   "n_signals": 1399,
+   "llm_delta": -0.0013775910703982056,
+   "lo": -0.012767449432542636,
+   "hi": 0.009747680295119082,
+   "random_picker_delta": 0.0036672769105284965,
+   "random_picker_sd": 0.0018367283341144144,
+   "llm_minus_bias": -0.0050448679809267025,
+   "llm_below_share_of_random_pickers": 1.0
+  },
+  "richer features": {
+   "n_signals": 1399,
+   "llm_delta": 0.0023334360125227267,
+   "lo": -0.007308653951641182,
+   "hi": 0.012182219421524792,
+   "random_picker_delta": 0.0016100849749043375,
+   "random_picker_sd": 0.001735855684866661,
+   "llm_minus_bias": 0.0007233510376183892,
+   "llm_below_share_of_random_pickers": 0.35333333333333333
+  },
+  "same sector": {
+   "n_signals": 1399,
+   "llm_delta": -0.002778491661214975,
+   "lo": -0.01243504916954395,
+   "hi": 0.008849152035857127,
+   "random_picker_delta": 0.0034246171194906826,
+   "random_picker_sd": 0.0016640350099775415,
+   "llm_minus_bias": -0.006203108780705657,
+   "llm_below_share_of_random_pickers": 1.0
+  },
+  "index-only signals": {
+   "n_signals": 1194,
+   "llm_delta": -0.0031162984627725356,
+   "lo": -0.013030798936941642,
+   "hi": 0.006860136493276541,
+   "random_picker_delta": 0.0023597703037483366,
+   "random_picker_sd": 0.0019993507287914642,
+   "llm_minus_bias": -0.005476068766520872,
+   "llm_below_share_of_random_pickers": 0.9933333333333333
+  }
+ }
+}
