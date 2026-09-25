@@ -38,10 +38,17 @@ streaming writes don't support — mounting the DB directly threw repeated
 `BufferedWriteHandler.OutOfOrderError`s in testing. `entrypoint.sh` instead
 pulls `data/` down to local disk before the scan and pushes it back after
 (`deploy/gcp/sync_data.py`), so SQLite gets a normal local filesystem and the
-bucket only ever sees whole-file object writes. This is safe because
-schedules don't overlap (one job execution at a time) — if you later add
-concurrent writers, migrate `tools/db_manager.py` and `portfolio/manager.py`
-to Cloud SQL instead.
+bucket only ever sees whole-file object writes.
+
+Executions DO overlap in practice (the 5-minute stop-loss check runs alongside
+scans and the swing trader), and a plain download-everything/upload-everything
+cycle is last-writer-wins: a slow run silently overwrote a faster run's
+results with its stale copy (this lost the 9/24 swing-trade exits before it
+was caught). Two guards prevent that: a lock object in the bucket
+(`_locks/data.lock`) makes executions take turns (a lock older than 15 min is
+treated as abandoned by a killed run), and `--upload` writes only files that
+changed since `--download`. If you later need true concurrent writers, migrate
+`tools/db_manager.py` and `portfolio/manager.py` to Cloud SQL instead.
 
 ---
 
@@ -220,12 +227,18 @@ silent. Two distinct causes, both need the fix to have run before
   on the scheduler service account, or it can't mint the OAuth token it
   sends — `01_setup_project.sh` grants this.
 
-**SQLite "database is locked" errors** — `data/` is local disk inside each
-execution (downloaded from GCS at start, uploaded back at end), so this can
-only happen if two executions run concurrently against the same bucket state.
-This setup avoids that by design (schedules don't overlap); if you manually
-trigger executions concurrently, wait for one to finish before triggering
-another.
+**Executions stuck "waiting" / a run seems slow to start its work** — runs
+take turns on the bucket lock, so a run queues behind whichever one holds
+it (each execution spends ~2.5 min mostly on cold-start imports; the actual
+work is seconds). Look for `Acquired data lock` / `Released data lock` in the
+execution logs. A run that can't get the lock within 20 min exits with an
+error, and a lock left by a killed run is taken over after 15 min. To clear a
+stuck lock manually: `gsutil rm gs://<bucket>/_locks/data.lock`.
+
+**Saved state looks stale or missing recent trades** — check that every
+execution log shows `Uploaded N changed object(s)` after the job's own output;
+if a run died before upload, its changes for that run are lost (the
+scheduled jobs are idempotent, so the next run recomputes them).
 
 **Out of memory / slow scans** — bump `--memory` and `--cpu` in
 `04_deploy_job.sh` (currently 4Gi/2 vCPU, matching the AWS guide's
