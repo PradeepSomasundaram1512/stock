@@ -6,6 +6,11 @@ endpoints computed from the same files the scheduled jobs write to the GCS bucke
     /api/latest    candidates of the latest scan: production vs shadow decision
     /api/history   per-day model health and BUY counts
     /api/paper     paper-trading account and swing trades
+    /api/context   freshness of the last scan, VIX/SPY, model spend vs. budget
+    /api/scans     list of recent scans;  /api/latest?scan=ID  one scan's candidates
+    /api/tickers   tickers seen;  /api/ticker?t=XYZ  one ticker's decision history
+    /api/arena     production vs. shadow model: agreement, disagreements, moves since
+    /api/scoreboard  forward-audit results (static, from scoreboard.json) + live outcomes
 
 It only ever READS (its service account has objectViewer on the bucket), so it cannot
 corrupt trading state. Files are re-downloaded at most every CACHE_TTL seconds.
@@ -23,7 +28,9 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 HERE = Path(__file__).parent
 CACHE = Path(os.environ.get("DATA_DIR") or "/tmp/dashboard-data")
@@ -89,9 +96,11 @@ def summary() -> dict:
     return out
 
 
-def latest() -> dict:
+def latest(q=None) -> dict:
     con = db()
-    scan = con.execute("select scan_id, max(decided_at) t from llm_decisions").fetchone()
+    want = (q or {}).get("scan")
+    scan = (con.execute("select scan_id, max(decided_at) t from llm_decisions where scan_id=?", (want,)).fetchone()
+            if want else con.execute("select scan_id, max(decided_at) t from llm_decisions").fetchone())
     if not scan or not scan["scan_id"]:
         return {"scan_id": None, "candidates": []}
     cands = rows(con,
@@ -114,31 +123,38 @@ def history() -> dict:
     return {"health": health, "recommendations": recs}
 
 
-_PRICES: dict = {}          # ticker -> (fetched_at, price)
+_PRICES: dict = {}          # ticker -> (fetched_at, {"price":..., "prev":...})
 PRICE_TTL = 60
 
 
-def _quote(t: str):
-    """Last price from Yahoo's public chart endpoint; None if unavailable (callers fall back to cost)."""
+def _meta(t: str, ttl: int = PRICE_TTL):
+    """Last price and previous close from Yahoo's public chart endpoint; None if unavailable."""
     hit = _PRICES.get(t)
-    if hit and time.time() - hit[0] < PRICE_TTL:
+    if hit and time.time() - hit[0] < ttl:
         return hit[1]
     try:
+        from urllib.parse import quote
         req = urllib.request.Request(
-            f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1d&interval=1d",
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(t)}?range=1d&interval=1d",
             headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=5) as r:
-            price = json.load(r)["chart"]["result"][0]["meta"]["regularMarketPrice"]
+            m = json.load(r)["chart"]["result"][0]["meta"]
+        val = {"price": m["regularMarketPrice"], "prev": m.get("chartPreviousClose") or m.get("previousClose")}
     except Exception:                                   # noqa: BLE001 - a missing quote must not break the page
         return hit[1] if hit else None
-    _PRICES[t] = (time.time(), price)
-    return price
+    _PRICES[t] = (time.time(), val)
+    return val
 
 
-def marks(tickers) -> dict:
+def _quote(t: str, ttl: int = PRICE_TTL):
+    m = _meta(t, ttl)
+    return m["price"] if m else None
+
+
+def marks(tickers, ttl: int = PRICE_TTL) -> dict:
     tickers = sorted(set(tickers))
     with ThreadPoolExecutor(max_workers=8) as pool:
-        return dict(zip(tickers, pool.map(_quote, tickers)))
+        return dict(zip(tickers, pool.map(lambda t: _quote(t, ttl), tickers)))
 
 
 def paper() -> dict:
@@ -161,7 +177,124 @@ def paper() -> dict:
     return out
 
 
-ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": history, "/api/paper": paper}
+MODEL_PRICES = {"gpt-4o-mini": (0.15, 0.60)}       # USD per 1M tokens (in, out): production model
+ET = ZoneInfo("America/New_York")
+
+
+def _market_open(now=None) -> bool:
+    n = (now or datetime.now(ET)).astimezone(ET)
+    return n.weekday() < 5 and (9, 30) <= (n.hour, n.minute) < (16, 0)
+
+
+def context(q=None) -> dict:
+    con = db()
+    out = {"market_open": _market_open()}
+    last = con.execute("select max(decided_at) from llm_decisions").fetchone()[0]
+    if last:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(last).replace(tzinfo=timezone.utc)).total_seconds() / 60
+        out.update(last_scan_at=last, age_min=round(age), stale=bool(out["market_open"] and age > 90))
+    for key, sym in (("spy", "SPY"), ("vix", "^VIX")):
+        m = _meta(sym)
+        out[key] = ({"price": m["price"], "chg": (m["price"] / m["prev"] - 1) if m.get("prev") else None} if m else None)
+    r = con.execute("select market_trend from recommendations where market_trend is not null "
+                    "order by recommendation_date desc limit 1").fetchone()
+    out["trend"] = r[0] if r else None
+    # model spend: shadow cost is logged; production cost is estimated from logged tokens
+    month = (last or datetime.utcnow().isoformat())[:7]
+    day = (last or "")[:10]
+    prod = lambda like: sum(
+        (ti or 0) * MODEL_PRICES.get(m, (0.15, 0.60))[0] / 1e6 + (to or 0) * MODEL_PRICES.get(m, (0.15, 0.60))[1] / 1e6
+        for m, ti, to in con.execute(
+            "select model, sum(tokens_in), sum(tokens_out) from llm_decisions where decided_at like ? group by model", (like,)))
+    cost = {"prod_today": prod(day + "%"), "prod_month": prod(month + "%"), "budget": float(os.environ.get("SHADOW_DAILY_BUDGET_USD", "0.25"))}
+    if _table_exists(con, "shadow_decisions"):
+        sc = lambda like: con.execute("select coalesce(sum(est_cost_usd),0) from shadow_decisions where decided_at like ?", (like,)).fetchone()[0]
+        cost.update(shadow_today=sc(day + "%"), shadow_month=sc(month + "%"), shadow_total=sc("%"))
+    out["cost"] = cost
+    return out
+
+
+def scans(q=None) -> dict:
+    con = db()
+    return {"scans": rows(con,
+        "select scan_id, max(decided_at) at, count(*) n, sum(raw_decision='BUY') buys, sum(llm_status!='ok') failed, "
+        "sum(in_signal_list=1) listed from llm_decisions group by scan_id order by at desc limit 80")}
+
+
+def tickers(q=None) -> dict:
+    con = db()
+    return {"tickers": sorted({r[0] for r in con.execute(
+        "select distinct ticker from llm_decisions union select distinct ticker from recommendations")})}
+
+
+def ticker(q=None) -> dict:
+    t = ((q or {}).get("t") or "").upper().strip()
+    con = db()
+    dec = rows(con,
+        "select p.decided_at, p.raw_decision decision, p.raw_confidence confidence, p.final_decision final, p.price, p.rsi, "
+        "p.reasoning, s.decision shadow_decision, s.confidence shadow_confidence "
+        "from llm_decisions p left join shadow_decisions s on s.scan_id=p.scan_id and s.ticker=p.ticker "
+        "where p.ticker=? order by p.decided_at desc limit 60", t)
+    recs = rows(con,
+        "select recommendation_date date, decision, confidence, entry_price, price_target, stop_loss, outcome, "
+        "profit_loss_pct, exit_reason, scan_type from recommendations where ticker=? order by recommendation_date desc limit 40", t)
+    m = _meta(t) if t else None
+    return {"ticker": t, "last": m["price"] if m else None, "decisions": dec, "recommendations": recs}
+
+
+def arena(q=None) -> dict:
+    con = db()
+    if not _table_exists(con, "shadow_decisions"):
+        return {"n": 0}
+    j = rows(con,
+        "select p.scan_id, p.decided_at at, p.ticker, p.raw_decision prod, p.raw_confidence prod_conf, p.price, "
+        "s.decision shadow, s.confidence shadow_conf, s.shadow_model model "
+        "from shadow_decisions s join llm_decisions p on p.scan_id=s.scan_id and p.ticker=s.ticker "
+        "where s.llm_status='ok' and p.llm_status='ok' order by p.decided_at desc")
+    n = len(j)
+    out = {"n": n, "model": j[0]["model"] if j else None}
+    if not n:
+        return out
+    out["agree"] = sum(1 for r in j if r["prod"] == r["shadow"]) / n
+    cross = {}
+    for r in j:
+        cross.setdefault(r["prod"], {}).setdefault(r["shadow"], 0)
+        cross[r["prod"]][r["shadow"]] += 1
+    out["crosstab"] = cross
+    out["buy_rate"] = {"prod": sum(r["prod"] == "BUY" for r in j) / n, "shadow": sum(r["shadow"] == "BUY" for r in j) / n}
+    out["mean_conf"] = {"prod": sum(r["prod_conf"] or 0 for r in j) / n, "shadow": sum(r["shadow_conf"] or 0 for r in j) / n}
+    dis = [r for r in j if r["prod"] != r["shadow"]]
+    # move since the decision (price at decision -> last price): unmatured, so treat as early evidence only
+    tick = sorted({r["ticker"] for r in j if r["prod"] == "BUY" or r["shadow"] == "BUY"})[:80]
+    px = marks(tick, ttl=600)
+    move = lambda r: (px.get(r["ticker"]) / r["price"] - 1) if px.get(r["ticker"]) and r["price"] else None
+    for r in j:
+        r["move"] = move(r)
+    for side in ("prod", "shadow"):
+        mv = [r["move"] for r in j if r[side] == "BUY" and r["move"] is not None]
+        out[f"{side}_buy_move"] = {"n": len(mv), "mean": sum(mv) / len(mv) if mv else None}
+    out["disagreements"] = [{k: r[k] for k in ("at", "ticker", "prod", "shadow", "prod_conf", "shadow_conf", "price", "move")}
+                            for r in dis[:60]]
+    out["n_disagree"] = len(dis)
+    return out
+
+
+def scoreboard(q=None) -> dict:
+    f = HERE / "scoreboard.json"
+    out = {"audit": json.loads(f.read_text()) if f.exists() else None}
+    con = db()
+    live = rows(con,
+        "select outcome, count(*) n, avg(profit_loss_pct) avg_pl from recommendations "
+        "where decision='BUY' and outcome is not null group by outcome")
+    tot = sum(r["n"] for r in live)
+    out["live"] = {"by_outcome": live, "n": tot,
+                   "win_rate": (sum(r["n"] for r in live if r["outcome"] == "WIN") / tot) if tot else None}
+    return out
+
+
+ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": history, "/api/paper": paper,
+          "/api/context": context, "/api/scans": scans, "/api/tickers": tickers, "/api/ticker": ticker,
+          "/api/arena": arena, "/api/scoreboard": scoreboard}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -175,7 +308,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        u = urlparse(self.path)
+        path, query = u.path, {k: v[0] for k, v in parse_qs(u.query).items()}
         if path == "/healthz":
             return self._send(200, b"ok", "text/plain")
         if path in ("/", "/index.html"):
@@ -185,7 +319,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b"not found", "text/plain")
         try:
             refresh()
-            self._send(200, json.dumps(fn(), default=str).encode(), "application/json")
+            self._send(200, json.dumps(fn(query) if fn.__code__.co_argcount else fn(), default=str).encode(), "application/json")
         except Exception as e:                       # noqa: BLE001 - report, never crash the server
             self._send(500, json.dumps({"error": f"{type(e).__name__}: {e}"}).encode(), "application/json")
 

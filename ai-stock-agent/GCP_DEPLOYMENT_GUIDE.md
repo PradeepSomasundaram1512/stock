@@ -370,3 +370,10 @@ Then send the tester the service URL (`gcloud run services describe stock-dashbo
 no longer works: IAP redirects it to sign-in, so open the service URL in a browser instead.
 
 Local development: `DATA_DIR=/path/to/copies python dashboard/server.py`.
+
+### Dashboard tabs
+
+- **Overview**: freshness badge (red if the market is open and no scan for 90 minutes), SPY/VIX, model spend vs. cap, today's health, latest scan, charts, paper account.
+- **History**: any past scan, or one ticker's full decision and outcome history; CSV export.
+- **Scoreboard**: the forward-audit result (LLM vs. matched placebo, random stocks and rule baselines, with confidence intervals), a confidence-calibration chart, and live exit outcomes. The audit numbers come from `dashboard/scoreboard.json`; regenerate with `python dashboard/build_scoreboard.py` after re-running `paper_analysis.py`/`paper_baselines.py`, then redeploy.
+- **Model arena**: production vs. shadow model: agreement matrix, every disagreement, and the move since each call (unmatured, early evidence only).
