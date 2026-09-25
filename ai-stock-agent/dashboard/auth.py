@@ -107,3 +107,28 @@ def token_from_cookie(header: str) -> str:
         if k == COOKIE:
             return v
     return ""
+
+
+class RateLimiter:
+    """At most `limit` events per `window` seconds per key (per server instance). Bounded memory: idle keys are dropped."""
+
+    def __init__(self, limit: int = 10, window: float = 300.0):
+        self.limit, self.window, self.hits = limit, window, {}
+
+    def allow(self, key: str, now: float = None) -> bool:
+        now = time.time() if now is None else now
+        if len(self.hits) > 5000:                                   # a flood of distinct addresses must not exhaust memory
+            self.hits = {k: v for k, v in self.hits.items() if v and now - v[-1] < self.window}
+        recent = [t for t in self.hits.get(key, []) if now - t < self.window]
+        if len(recent) >= self.limit:
+            self.hits[key] = recent
+            return False
+        recent.append(now)
+        self.hits[key] = recent
+        return True
+
+
+def client_ip(forwarded_for: str, peer: str) -> str:
+    """Cloud Run appends the address it saw as the LAST entry of X-Forwarded-For; anything before it is client-supplied and spoofable."""
+    parts = [p.strip() for p in (forwarded_for or "").split(",") if p.strip()]
+    return parts[-1] if parts else peer

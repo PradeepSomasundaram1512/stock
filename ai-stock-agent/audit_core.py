@@ -40,10 +40,24 @@ def load_signals(db):
     return df.reset_index(drop=True), raw_counts, len(con.execute("select 1 from recommendations").fetchall())
 
 
-def load_panel(tickers, start, end):
+def load_panel(tickers, start, end, cache_dir=None):
+    """Price panel with derived columns. With `cache_dir`, the raw download is frozen on first use and reused afterwards, keyed by the
+    exact tickers and dates: Yahoo revises adjusted prices slightly between downloads, which made the paper's numbers wobble from run to
+    run (the portfolio-rule row moved between +8.6% and +8.9%). The paper uses a cache; the live forward test never does."""
+    import hashlib
     tick = sorted(set(tickers) | {"SPY"})
-    raw = yf.download(tick + ["^VIX"], start=start, end=end, auto_adjust=True,
-                      progress=False, group_by="ticker", threads=True)
+    raw, path = None, None
+    if cache_dir is not None:
+        key = hashlib.sha1(f"{','.join(tick)}|{pd.Timestamp(start).date()}|{pd.Timestamp(end).date()}".encode()).hexdigest()[:10]
+        path = Path(cache_dir) / f"daily_panel_{key}.pkl.gz"
+        if path.exists():
+            raw = pd.read_pickle(path)
+    if raw is None:
+        raw = yf.download(tick + ["^VIX"], start=start, end=end, auto_adjust=True,
+                          progress=False, group_by="ticker", threads=True)
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            raw.to_pickle(path, compression="gzip")
     spy_idx = raw["SPY"].dropna().index
     get = lambda f: pd.DataFrame({t: raw[t][f] for t in tick if t in raw.columns.get_level_values(0)}).reindex(spy_idx)
     C, O, Hh, L = get("Close"), get("Open"), get("High"), get("Low")

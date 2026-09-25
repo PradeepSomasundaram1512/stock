@@ -32,3 +32,5 @@ jobs:
         run: python tests/test_track_record.py
       - name: Scan-universe tests
         run: python tests/test_scan_universe.py
+      - name: Daily-digest system-check tests
+        run: python tests/test_digest_checks.py

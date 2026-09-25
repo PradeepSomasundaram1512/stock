@@ -121,7 +121,7 @@ def perf(daily):
 def main():
     sig, raw_counts, n_raw = load_signals()
     fixed = fixed_universe()
-    P = load_panel(sorted(set(sig["ticker"].unique()) | set(fixed)), sig["day"].min() - pd.Timedelta(days=140), DATA_END)
+    P = load_panel(sorted(set(sig["ticker"].unique()) | set(fixed)), sig["day"].min() - pd.Timedelta(days=140), DATA_END, cache_dir=RES)
     dates = P["C"].index
     universe = [t for t in fixed if t in P["C"].columns and t != "SPY"]
     sig["i"] = dates.searchsorted(sig["day"], side="right") - 1

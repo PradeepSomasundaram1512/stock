@@ -187,5 +187,25 @@ function latestCallBanner(t, d) {
   box.append(el("div", {className: "toolbar", style: "margin:0"}, el("b", {textContent: "Latest call"}), pill(c.decision), el("span", {textContent: c.confidence != null ? pct(c.confidence) + " confidence" : ""}),
     c.final ? pill(c.final) : "", el("span", {className: "mute small", textContent: when + (c.in_latest_scan ? " · from the latest scan" : " · not analysed in the latest scan, this is its most recent call")})));
   if (c.reasoning) box.append(el("div", {className: "small mute", style: "margin-top:6px", textContent: c.reasoning}));
+  box.append(similarBlock(t));
+  return box;
+}
+
+/* How did past calls like this one turn out? (from the logged history; honest about uncertainty and small samples) */
+function similarBlock(t) {
+  const box = el("div", {className: "similar small", style: "margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"});
+  box.append(el("div", {className: "mute", textContent: "Checking how similar past calls did…"}));
+  get("/api/similar?t=" + encodeURIComponent(t)).then(d => {
+    box.replaceChildren(el("b", {textContent: "How similar past calls did"}));
+    if (!d.available) { box.append(el("div", {className: "mute", textContent: "No history to compare with yet."})); return; }
+    const rate = c => `${pct(c.win_rate)} won (95% interval ${pct(c.lo)} to ${pct(c.hi)}, ${c.n} calls)`, ok = c => c && c.n >= d.min_n, line = txt => box.append(el("div", {textContent: txt}));
+    const s = d.similar;
+    if (ok(s)) line(`Past ${d.decision} calls in a similar setup (RSI ${s.rsi_range[0]} to ${s.rsi_range[1]}${s.trend ? ", " + s.trend + " trend" : ""}): ${rate(s)}${s.avg_pl != null ? "; average result " + num(s.avg_pl, 2) + "%" : ""}.`);
+    else line(`Too few similar past ${d.decision} calls to say anything (${s ? s.n : 0}; at least ${d.min_n} needed).`);
+    if (ok(d.all_same_decision)) line(`All past ${d.decision} calls: ${rate(d.all_same_decision)}.`);
+    if (ok(d.same_confidence)) line(`At about the same confidence (${pct(d.same_confidence.range[0])} to ${pct(d.same_confidence.range[1])}): ${rate(d.same_confidence)}.`);
+    if (d.confidence_informative === false) line("In this history, higher stated confidence has not gone with better outcomes, so do not read it as a probability.");
+    box.append(el("div", {className: "mute", textContent: "Results are the labels from the live stop/target/time exit rules on closed calls. This describes the past; it is not a forecast."}));
+  }).catch(() => { box.replaceChildren(); });
   return box;
 }

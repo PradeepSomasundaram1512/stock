@@ -16,6 +16,8 @@
 \input{results_macros}
 \input{results_intraday}
 \input{results_ops}
+\input{results_baselines}
+\input{results_forward}
 
 \newcommand{\pct}[1]{$#1$\%}
 \renewcommand{\algorithmicrequire}{\textbf{Input:}}
@@ -218,6 +220,42 @@ Intraday & \mdeSeIntra & \mdeIntra & \mdeUpperIntra \\
 
 \textbf{What the null can and cannot rule out.} Only the intraday test is sharp: its interval excludes any edge above \pct{\mdeUpperIntra} per trade, below the 10~bps cost. At ten days the MDE is \pct{\mdeTen}; an edge of 0.5\% per ten days, worth roughly 13\% per year if it could be traded continuously, lies well inside the interval. The ten-day result therefore means ``no edge larger than about \mdeTen\%'', not ``no edge''.
 
+\subsection{Do simple rules do as well?}
+A selection result is only meaningful next to trivial alternatives. On each of the \baseDates{} dates with LLM BUYs, four rules chose the same number of stocks from the fixed index pool using one column of the price panel and no model (Table~\ref{tab:baselines}). None is distinguishable from the LLM. The lowest-RSI rule is nominally best, but its interval spans zero as well, so with the power of Table~\ref{tab:power} we can neither confirm nor exclude an edge of that size.
+
+\begin{table}[t]
+\centering
+\caption{10-day CAR (\%) of the \baseN{} LLM BUY signals and of rules picking the same number of stocks per date; last columns: LLM minus rule.}
+\label{tab:baselines}
+\footnotesize\setlength{\tabcolsep}{2pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrcrc@{}}
+\toprule
+Strategy & Mean & 95\% CI & LLM $-$ rule & 95\% CI \\
+\midrule
+\baselinesRows
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Consistency over time and a pre-registered forward test}
+Splitting the signal dates at 60\% (\fwdEarlyN{} signals in \fwdEarlyB{} independent ten-day blocks, then \fwdLateN{} in \fwdLateB{}) and evaluating four fixed hypotheses in each window (Table~\ref{tab:forward}) finds no detectable effect in either. The lowest-RSI rule's advantage over the universe is positive in both windows, yet its interval always spans zero; confidence gating and confidence ranking are null in both. Because signals cluster in time, the effective sample is the number of independent blocks (\fwdAllB{}), so the smallest detectable difference between rules is about \fwdMDE{} percentage points. The lowest-RSI hypothesis was suggested by these development results, so these windows are exploratory; only forward data can confirm it. We therefore froze the four hypotheses, thresholds and a minimum sample (\fwdNeedS{} matured signals and \fwdNeedB{} independent blocks) in a committed pre-registration on 2026-09-25, before any outcome of the forward window existed. Below that sample the test reports ``insufficient data'' rather than findings. At the time of writing no forward signal had matured.
+
+\begin{table}[t]
+\centering
+\caption{Fixed hypotheses in the early and late development windows: 10-day CAR difference in \% (rank correlation for H2), with 95\% CI.}
+\label{tab:forward}
+\footnotesize\setlength{\tabcolsep}{2pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Hypothesis & Early window & Late window \\
+\midrule
+\forwardRows
+\bottomrule
+\end{tabular}}
+\end{table}
+
 \subsection{Specification--deployment mismatch: a counterfactual exit analysis}
 The project was designed for 5--10-day swing trades, and the codebase contains a swing prompt that asks for stops of 2--3$\times$ \emph{daily} ATR. The consistency audit found that the production scanner instead called the \emph{intraday} prompt on 60-minute bars, with stops at 1.5$\times$ \emph{hourly} ATR, and closed every position the same day: of \prodN{} BUYs with a recorded exit, \prodEod\% were closed at the end of day and the other \prodStopN{} by the intraday stop. No position was ever held for ten days with these levels, so the analysis below is a \emph{counterfactual}: it asks what would have happened had the deployed stop and target been attached to the ten-day hold the project was designed for. Measured against daily ATR, that stop is only \medStopATR{}$\times$ (median \medStopPct\% below entry). Table~\ref{tab:exit} shows the replay: \depStopRate\% of positions would have been stopped out, the win rate would have fallen from \holdWin\% to \depWin\%, and mean net return from \pct{\holdNet} to \pct{\depNet}, a difference of \pct{\depGap} per trade (CI \pct{\depGapCI}). Fig.~\ref{fig:grid} shows that across the grid, returns rise steadily as stops widen, and no stop or target beats simply holding (\pct{\gridBest}); the tightest setting earns \pct{\gridHalfNoTgt}. Because the replay applies an intraday rule to a horizon it was not built for, it quantifies a configuration error, not a realised loss. Its realised counterpart is the intraday analysis, where the deployed levels stopped \iStop\% of trades (\prodStopN{} of \prodN{} in production) and changed mean return by only \pct{\iDepGap} (CI \pct{\iDepGapCI}).
 
@@ -340,11 +378,11 @@ Regime & $N$ & CAR & $\Delta$ & 95\% CI & $p$ \\
 \section{Discussion}
 \textbf{Lessons for AI engineering.} (1) \emph{Attribute before you celebrate.} The agent's portfolio beat SPY on Sharpe (\pLlmSh{} vs.\ \pSpySh{}) and its placebo (\pMatchSh{}), yet neither its alpha ($t{=}\pLlmAlphaT$) nor its long--short spread over the placebo ($t{=}\pLSAlphaT$) is distinguishable from zero, and the placebo's own Sharpe moved from \prevMatchSh{} to \pMatchSh{} when the pool was fixed. P\&L is a property of the whole pipeline, and the LLM's contribution must be measured against a counterfactual that removes only the LLM's choice. (2) \emph{Specification drift is a first-class failure mode.} A single wrong flag sent the intraday prompt into production for a swing strategy. Every component then behaved ``correctly'' in isolation while a counterfactual replay shows it would have lost \pct{\depGap} per trade on the intended horizon. Consistency checks between prompt horizon, feature timeframe, exit rules and evaluation horizon belong in the test suite. (3) \emph{Do not gate on verbalized confidence} unless it has been calibrated on forward data. (4) \emph{Log the failure path.} Seven in ten decisions came from a silent exception fallback that emitted a plausible-looking HOLD; fallbacks need their own label, counter and alert.
 
-\textbf{Threats to validity.} The sample spans nine months, \nDays{} signal days and a single model (GPT-4o-mini), so power is limited (Table~\ref{tab:power}); a 2024-vintage model says nothing about frontier models. The February gap is not random downtime but the quota outage of Table~\ref{tab:ops}, and signals from that period rest on the small share of candidates that reached the model. The placebo pool is a fixed list of index constituents reconstructed from two public web sources that we did not independently audit, and it excludes the \nNonIndex{} non-index tickers the scanner also traded, so matching is among index names only. Stage-3 gates edit the LLM's output, HOLDs were not stored, and the multi-day placebo uses daily rather than pre-screen features, so the audit measures the LLM plus its gates against an approximation of its candidate set. The ten-day exit analysis is a counterfactual, since no position was held ten days. We assume 10~bps costs, no market impact and error-free Yahoo Finance bars; token counts and per-decision API cost were not logged. FAP does not prove that LLM agents cannot add value, only that this agent did not do so measurably.
+\textbf{Threats to validity.} The sample spans nine months, \nDays{} signal days and a single model (GPT-4o-mini), so power is limited (Table~\ref{tab:power}); a 2024-vintage model says nothing about frontier models. The February gap is not random downtime but the quota outage of Table~\ref{tab:ops}, and signals from that period rest on the small share of candidates that reached the model. The placebo pool is a fixed list of index constituents reconstructed from two public web sources that we did not independently audit, and it excludes the \nNonIndex{} non-index tickers the scanner also traded, so matching is among index names only. After the study period the scan list was aligned to the current index (2026-09-25), so forward results come from a slightly different set of stocks; that change is logged with the pre-registration. Stage-3 gates edit the LLM's output, HOLDs were not stored, and the multi-day placebo uses daily rather than pre-screen features, so the audit measures the LLM plus its gates against an approximation of its candidate set. The ten-day exit analysis is a counterfactual, since no position was held ten days. We assume 10~bps costs, no market impact and error-free Yahoo Finance bars; token counts and per-decision API cost were not logged. FAP does not prove that LLM agents cannot add value, only that this agent did not do so measurably.
 
 %──────────────────────────────────────────────────────────────────────────────
 \section{Conclusion}
-We ran a multi-agent LLM trading system in production after the model's knowledge cutoff and audited its \nRaw{} logged decisions with the Forward Audit Protocol. The LLM's stock selection added no statistically detectable return over characteristic-matched alternatives at any horizon (minimum detectable effects in Table~\ref{tab:power}). A counterfactual replay shows that the deployed intraday stop levels would have turned the captured market drift into a flat result, verbalized confidence was uninformative, and \opFallbackPct\% of the logged decisions were quota-exhaustion fallbacks. FAP (contamination-free logging, matched placebos, block-bootstrap inference with stated power, consistency, calibration and operational audits) is model-agnostic and cheap to adopt. We recommend it as a minimum standard before claiming alpha for LLM agents. Future work will run the corrected swing configuration with pre-registered hypotheses, compare frontier models under the same protocol, and re-test regime effects out of sample.
+We ran a multi-agent LLM trading system in production after the model's knowledge cutoff and audited its \nRaw{} logged decisions with the Forward Audit Protocol. The LLM's stock selection added no statistically detectable return over characteristic-matched alternatives at any horizon (minimum detectable effects in Table~\ref{tab:power}). A counterfactual replay shows that the deployed intraday stop levels would have turned the captured market drift into a flat result, verbalized confidence was uninformative, and \opFallbackPct\% of the logged decisions were quota-exhaustion fallbacks. FAP (contamination-free logging, matched placebos, block-bootstrap inference with stated power, consistency, calibration and operational audits) is model-agnostic and cheap to adopt. We recommend it as a minimum standard before claiming alpha for LLM agents. A pre-registered forward test (four fixed hypotheses; minimum sample of \fwdNeedS{} signals in \fwdNeedB{} independent blocks) is running and will be reported once it matures. Future work will compare frontier models under the same protocol and re-test regime effects out of sample.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

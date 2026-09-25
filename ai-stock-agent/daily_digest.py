@@ -11,7 +11,7 @@ Usage:  python daily_digest.py [YYYY-MM-DD]   (default: today, UTC)
 import os
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ICON = {"ok": "✅", "warn": "⚠️", "none": "ℹ️"}
@@ -67,6 +67,54 @@ def render(s: dict) -> tuple[str, str]:
     return "\n".join(lines), status
 
 
+def system_checks(data_dir: Path = None, now: datetime = None) -> tuple:
+    """Is the machinery itself healthy? Returns (lines, problems): scan list size/age, heatmap snapshot age, latest scan age."""
+    import json
+    data_dir, now = Path(data_dir or DB.parent), now or datetime.now(timezone.utc)
+    lines, problems = [], []
+
+    def age_hours(iso: str) -> float:
+        t = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return ((now - (t if t.tzinfo else t.replace(tzinfo=timezone.utc))).total_seconds()) / 3600
+
+    def load(name):
+        try:
+            return json.loads((data_dir / name).read_text())
+        except Exception:               # noqa: BLE001
+            return None
+
+    uni = load("scan_universe.json")
+    if not uni:
+        problems.append("scan list: refreshed file missing, the built-in (older) list is in use")
+    else:
+        a = age_hours(uni["asof"]) / 24
+        lines.append(f"Scan list: {uni['n']} tickers, refreshed {a:.0f} d ago")
+        if not 480 <= uni["n"] <= 600:
+            problems.append(f"scan list size {uni['n']} is outside the expected 480-600")
+        if a > 10:
+            problems.append(f"scan list not refreshed for {a:.0f} days (the weekly job may have stopped)")
+    snap = load("market_snapshot.json")
+    if not snap:
+        problems.append("heatmap snapshot missing")
+    else:
+        h = age_hours(snap["asof"])
+        lines.append(f"Heatmap snapshot: {snap['n']} stocks, {h * 60:.0f} min old")
+        if h > 1.5:
+            problems.append(f"heatmap snapshot is {h:.1f} h old")
+        if snap.get("missing"):
+            problems.append(f"{len(snap['missing'])} tickers had no price data: {', '.join(snap['missing'][:8])}")
+    try:
+        last = sqlite3.connect(DB).execute("select max(decided_at) from llm_decisions").fetchone()[0]
+        if last:
+            h = age_hours(last)
+            lines.append(f"Latest scan: {h:.1f} h ago")
+            if h > 4:
+                problems.append(f"no scan for {h:.1f} h during a trading day")
+    except Exception as e:              # noqa: BLE001
+        problems.append(f"could not read the decision log: {e}")
+    return lines, problems
+
+
 def chain_update() -> tuple:
     """Commit completed days to the public tamper-evident chain (track_record.py); (line, problem?)."""
     try:
@@ -90,6 +138,12 @@ def main() -> int:
         text += "\n" + line
         if problem:
             status = "warn"
+        if status != "none":                                    # a market holiday has no scans to check
+            lines, problems = system_checks()
+            text += "\n" + "\n".join(lines)
+            if problems:
+                text += "\n" + "\n".join("⚠️ " + p for p in problems)
+                status = "warn"
     if "--print" in sys.argv:
         print(text)
         return 0

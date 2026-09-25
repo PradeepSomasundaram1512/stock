@@ -22,7 +22,7 @@ create table llm_decisions(scan_id text, decided_at text, ticker text, llm_statu
   final_decision text, price real, rsi real, trend text, risk_level text, price_target real, stop_loss real, reasoning text);
 create table shadow_decisions(scan_id text, decided_at text, ticker text, llm_status text, decision text, confidence real, shadow_model text, est_cost_usd real);
 create table recommendations(recommendation_date text, ticker text, decision text, confidence real, entry_price real, price_target real, stop_loss real,
-  outcome text, exit_date text, exit_price real, profit_loss_pct real, exit_reason text, scan_type text, market_trend text);
+  outcome text, exit_date text, exit_price real, profit_loss_pct real, exit_reason text, scan_type text, market_trend text, rsi real, trend text);
 -- an OLDER scan (AAA buy, BBB hold) and the LATEST scan (BBB sell, CCC buy, AAPL hold)
 insert into llm_decisions values ('old','2026-09-24T19:00:00','AAA','ok','BUY',0.9,1,'BUY',10,50,'up','low',12,9,'old reason');
 insert into llm_decisions values ('old','2026-09-24T19:00:01','BBB','ok','HOLD',0.5,0,null,20,50,'up','low',null,null,'old hold');
@@ -35,6 +35,12 @@ insert into shadow_decisions values ('new','2026-09-25T19:00:00','BBB','ok','SEL
 insert into shadow_decisions values ('new','2026-09-25T19:00:01','CCC','ok','HOLD',0.5,'m',0.01);
 insert into shadow_decisions values ('new','2026-09-25T19:00:02','AAPL','ok','HOLD',0.5,'m',0.01);
 """)
+# closed BUY history for the "similar calls" cohorts: 30 at RSI ~45 / uptrend (18 wins), 30 at RSI 80 / downtrend (3 wins), 5 still open
+for i in range(30):
+    _con.execute("insert into recommendations values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("2026-03-01", "H", "BUY", 0.8, 1, 1, 1, "WIN" if i < 18 else "LOSS", None, None, 1.0 if i < 18 else -1.0, None, None, None, 45.0, "up"))
+    _con.execute("insert into recommendations values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("2026-03-02", "H", "BUY", 0.8, 1, 1, 1, "WIN" if i < 3 else "LOSS", None, None, 1.0 if i < 3 else -1.0, None, None, None, 80.0, "down"))
+for i in range(5):
+    _con.execute("insert into recommendations values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ("2026-09-01", "H", "BUY", 0.8, 1, 1, 1, None, None, None, None, None, None, None, 45.0, "up"))
 _con.commit()
 _con.close()
 os.environ.update(SESSION_SECRET="x" * 40, ALLOWED_EMAILS="alice@example.com,bob@example.com", GOOGLE_CLIENT_ID="test-client",
@@ -95,6 +101,25 @@ class SessionTests(unittest.TestCase):
             self.assertIsNone(auth.verify_google("anything"))
         finally:
             os.environ["GOOGLE_CLIENT_ID"] = old
+
+
+class RateLimitTests(unittest.TestCase):
+    def test_limits_per_key_and_recovers(self):
+        rl = auth.RateLimiter(limit=3, window=60)
+        self.assertEqual([rl.allow("a", now=t) for t in (0, 1, 2, 3)], [True, True, True, False])
+        self.assertTrue(rl.allow("b", now=3))                                   # another address is unaffected
+        self.assertFalse(rl.allow("a", now=59))
+        self.assertTrue(rl.allow("a", now=61))                                  # the oldest attempt has aged out
+
+    def test_memory_stays_bounded_under_a_flood_of_addresses(self):
+        rl = auth.RateLimiter(limit=1, window=10)
+        for i in range(12000):
+            rl.allow(f"ip{i}", now=i * 0.01)
+        self.assertLess(len(rl.hits), 12000)
+
+    def test_only_the_last_forwarded_address_is_trusted(self):
+        self.assertEqual(auth.client_ip("6.6.6.6, 1.2.3.4", "10.0.0.1"), "1.2.3.4")   # attacker-supplied prefix is ignored
+        self.assertEqual(auth.client_ip("", "10.0.0.1"), "10.0.0.1")
 
 
 class HttpTests(unittest.TestCase):
@@ -228,6 +253,42 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(latest["n_disagree"], 1)                                                  # CCC only; the old scan's are excluded
         everything = json.loads(call(self.base, "/api/arena?scope=all", c)[1])
         self.assertEqual((everything["scope"], everything["n"]), ("all", 5))
+
+    def test_login_endpoints_are_rate_limited_and_headers_present(self):
+        old = server.LOGIN_LIMIT
+        server.LOGIN_LIMIT = auth.RateLimiter(limit=3, window=300)
+        try:
+            codes = [call(self.base, "/auth/login", method="POST", body=json.dumps({"credential": "junk"}).encode())[0] for _ in range(5)]
+            self.assertEqual(codes, [401, 401, 401, 429, 429])
+            code, _, h = call(self.base, "/auth/login", method="POST", body=b"{}")
+            self.assertEqual((code, h.get("Retry-After")), (429, "300"))
+        finally:
+            server.LOGIN_LIMIT = old
+        h = call(self.base, "/")[2]
+        self.assertIn("max-age", h.get("Strict-Transport-Security", ""))
+        self.assertIn("camera=()", h.get("Permissions-Policy", ""))
+
+    def test_similar_calls_use_closed_history_and_report_honest_intervals(self):
+        c = self.cookie("alice@example.com")
+        # CCC's latest call in the fixture is BUY with no RSI-40..50 match by design; give it one via the ticker's own row
+        d = json.loads(call(self.base, "/api/similar?t=CCC", c)[1])
+        self.assertTrue(d["available"])
+        self.assertEqual(d["decision"], "BUY")
+        self.assertEqual(d["all_same_decision"]["n"], 60)                                          # the 5 open calls are excluded
+        self.assertAlmostEqual(d["all_same_decision"]["win_rate"], 21 / 60)
+        self.assertEqual(d["similar"]["n"], 30)                                                    # RSI 40 +/- 8 and 'up' -> the 45/up cohort
+        self.assertAlmostEqual(d["similar"]["win_rate"], 0.6)
+        self.assertTrue(d["similar"]["lo"] < 0.6 < d["similar"]["hi"])                              # a real interval, not a point claim
+        self.assertFalse(json.loads(call(self.base, "/api/similar?t=NOPE", c)[1])["available"])
+        self.assertEqual(call(self.base, "/api/similar?t=CCC")[0], 401)                            # signed-out: refused
+
+    def test_wilson_interval_behaves(self):
+        lo, hi = server._wilson(0, 10)
+        self.assertEqual(lo, 0.0)
+        self.assertTrue(0.25 < hi < 0.35)                                                          # 0/10 is NOT "0% for sure"
+        lo, hi = server._wilson(50, 100)
+        self.assertTrue(0.40 < lo < 0.42 and 0.58 < hi < 0.60)
+        self.assertIsNone(server._wilson(0, 0))
 
     def test_dev_bypass_is_off(self):
         self.assertFalse(server.DEV_NO_AUTH)

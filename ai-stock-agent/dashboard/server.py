@@ -300,6 +300,53 @@ def heatmap(q=None) -> dict:
     return {"asof": snap["asof"], "age_min": round(age), "n": snap["n"], "stocks": stocks, "sectors": secs}
 
 
+def _wilson(k: int, n: int, z: float = 1.96):
+    """95% Wilson score interval for a proportion (well behaved for small n and rates near 0 or 1)."""
+    if n == 0:
+        return None
+    p = k / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
+    return max(0.0, c - h), min(1.0, c + h)
+
+
+def _cohort(con, sql: str, args: tuple) -> dict:
+    r = con.execute("select count(*), sum(outcome='WIN'), avg(profit_loss_pct) from recommendations where outcome is not null and " + sql, args).fetchone()
+    n, wins = r[0] or 0, r[1] or 0
+    ci = _wilson(wins, n)
+    return {"n": n, "win_rate": (wins / n) if n else None, "lo": ci[0] if ci else None, "hi": ci[1] if ci else None, "avg_pl": r[2]}
+
+
+MIN_COHORT = 20
+
+
+def similar(q=None) -> dict:
+    """How did past calls like this one turn out? Built only from the logged history (as-deployed exit outcomes, not a forecast)."""
+    t = ((q or {}).get("t") or "").upper().strip()
+    con = db()
+    cur = con.execute("select raw_decision, raw_confidence, rsi, trend, decided_at from llm_decisions where ticker=? order by decided_at desc limit 1", (t,)).fetchone()
+    if not cur or not cur["raw_decision"]:
+        return {"available": False, "reason": "no logged call for this ticker"}
+    dec, conf, rsi, trend = cur["raw_decision"], cur["raw_confidence"], cur["rsi"], cur["trend"]
+    out = {"available": True, "decision": dec, "confidence": conf, "rsi": rsi, "trend": trend, "min_n": MIN_COHORT,
+           "all_same_decision": _cohort(con, "decision=?", (dec,))}
+    if rsi is not None:
+        args = [dec, rsi - 8, rsi + 8]
+        sql = "decision=? and rsi between ? and ?"
+        if trend:
+            sql, args = sql + " and trend=?", args + [trend]
+        out["similar"] = dict(_cohort(con, sql, tuple(args)), rsi_range=[round(rsi - 8), round(rsi + 8)], trend=trend)
+    if conf is not None:
+        out["same_confidence"] = dict(_cohort(con, "decision=? and confidence between ? and ?", (dec, conf - 0.05, conf + 0.05)), range=[round(conf - 0.05, 2), round(conf + 0.05, 2)])
+    f = HERE / "scoreboard.json"
+    if f.exists():
+        sp = json.loads(f.read_text()).get("calibration", {}).get("spearman")
+        if sp:
+            out["confidence_informative"] = not (sp["lo"] <= 0 <= sp["hi"])      # False = confidence has not predicted outcomes
+    return out
+
+
 MODEL_PRICES = {"gpt-4o-mini": (0.15, 0.60)}       # USD per 1M tokens (in, out): production model
 ET = ZoneInfo("America/New_York")
 
@@ -449,7 +496,7 @@ def public(q=None) -> dict:
 ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": history, "/api/paper": paper,
           "/api/context": context, "/api/scans": scans, "/api/tickers": tickers, "/api/ticker": ticker,
           "/api/arena": arena, "/api/scoreboard": scoreboard,
-          "/api/pulse": pulse, "/api/quotes": quotes, "/api/chart": chart, "/api/heatmap": heatmap}
+          "/api/similar": similar, "/api/pulse": pulse, "/api/quotes": quotes, "/api/chart": chart, "/api/heatmap": heatmap}
 PUBLIC_ROUTES = {"/api/public": public}
 PUBLIC_FILES = {"/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
                 "/apple-touch-icon.png": ("icon-180.png", "image/png"), "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png"),
@@ -458,6 +505,7 @@ PUBLIC_FILES = {"/manifest.webmanifest": ("manifest.webmanifest", "application/m
 PUBLIC_CACHE_FILES = {"/public/chain.json": ("track_record_chain.json", "application/json"), "/public/revealed.csv": ("public_revealed.csv", "text/csv; charset=utf-8")}
 
 
+LOGIN_LIMIT = auth.RateLimiter(limit=10, window=300)     # sign-in attempts per address per 5 minutes
 DEV_NO_AUTH = os.environ.get("DASHBOARD_DEV_NO_AUTH") == "1" and bool(os.environ.get("DATA_DIR"))   # local only
 
 
@@ -470,6 +518,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
         for k, v in headers:
             self.send_header(k, v)
         self.end_headers()
@@ -489,6 +539,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if path in ("/auth/login", "/auth/google"):
+            ip = auth.client_ip(self.headers.get("X-Forwarded-For", ""), self.client_address[0])
+            if not LOGIN_LIMIT.allow(ip):
+                print("auth: rate limit hit", flush=True)
+                return self._send(429, b"too many attempts, try again in a few minutes", "text/plain", [("Retry-After", "300")])
         if path == "/auth/logout":
             return self._json(200, {"ok": True}, [("Set-Cookie", auth.cookie_header("", 0))])
         if path == "/auth/google":
