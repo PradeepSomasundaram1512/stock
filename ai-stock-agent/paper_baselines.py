@@ -1,0 +1,79 @@
+"""
+Does the LLM beat trivial rules?
+
+On every date the agent issued BUYs, each rule below picks the SAME NUMBER of stocks from
+the same fixed S&P 500 pool using one column of the price panel, no model involved. The
+10-day beta-adjusted CAR (same metric, panel and block bootstrap as paper_analysis.py) is
+then compared with the LLM's picks on those dates, weighting every LLM signal equally
+(the rule's per-date mean is paired with each LLM signal of that date).
+
+Rules:  momentum  (highest 20-day return)        reversal (lowest daily RSI)
+        low_vol   (lowest ATR%)                  universe  (every stock, equal weight)
+
+If a one-line rule matches the LLM, the model adds nothing over that rule; if the LLM's
+edge over a rule is not distinguishable from zero, that is the finding, not a failure.
+
+Run:    python paper_baselines.py
+Output: paper_results/baselines.json
+"""
+
+import json
+
+import numpy as np
+import pandas as pd
+
+import paper_analysis as pa
+
+RULES = {
+    "momentum": lambda P, i, pool: P["mom"].iloc[i][pool].nlargest,
+    "reversal": lambda P, i, pool: P["rsi"].iloc[i][pool].nsmallest,
+    "low_vol": lambda P, i, pool: P["atr_pct"].iloc[i][pool].nsmallest,
+}
+
+
+def main():
+    sig, _, _ = pa.load_signals()
+    fixed = pa.fixed_universe()
+    P = pa.load_panel(sorted(set(sig["ticker"].unique()) | set(fixed)),
+                      sig["day"].min() - pd.Timedelta(days=140), pa.DATA_END)
+    dates = P["C"].index
+    universe = [t for t in fixed if t in P["C"].columns and t != "SPY"]
+    sig["i"] = dates.searchsorted(sig["day"], side="right") - 1
+
+    buys = sig[sig.decision == "BUY"]
+    buys = buys[[pa.valid(P, r.i, r.ticker) for r in buys.itertuples()]]
+    per_date = buys.groupby("i").size()
+
+    llm, base, pos = [], {k: [] for k in [*RULES, "universe"]}, []
+    for i, n in per_date.items():
+        ok = [u for u in universe if pa.valid(P, i, u)]
+        picks = {}
+        for name, rule in RULES.items():
+            ranked = rule(P, i, ok)(min(n, len(ok)))
+            picks[name] = list(ranked.index)
+        picks["universe"] = ok
+        car = {name: np.mean([pa.car_path(P, i, u)[0][pa.H] for u in ps]) for name, ps in picks.items()}
+        for r in buys[buys.i == i].itertuples():
+            llm.append(pa.car_path(P, i, r.ticker)[0][pa.H])
+            pos.append(i)
+            for name in base:
+                base[name].append(car[name])
+
+    llm = np.array(llm)
+    out = {"n_signals": int(len(llm)), "n_dates": int(len(per_date)),
+           "llm": pa.block_boot(llm, pos), "rules": {}}
+    for name, v in base.items():
+        v = np.array(v)
+        out["rules"][name] = {"car10": pa.block_boot(v, pos), "llm_minus_rule": pa.block_boot(llm - v, pos)}
+    out["mde_llm_minus_rule"] = {k: 2.8 * r["llm_minus_rule"]["se"] for k, r in out["rules"].items()}
+
+    (pa.RES / "baselines.json").write_text(json.dumps(out, indent=2, default=float))
+    f = lambda d: f"{d['mean']*100:+.2f}% [{d['lo']*100:+.2f}, {d['hi']*100:+.2f}]"
+    print(f"{out['n_signals']} LLM BUYs on {out['n_dates']} dates; 10-day beta-adjusted CAR, 95% block-bootstrap CI")
+    print(f"  LLM BUY            {f(out['llm'])}")
+    for k, r in out["rules"].items():
+        print(f"  {k:10}         {f(r['car10'])}   LLM minus rule {f(r['llm_minus_rule'])}")
+
+
+if __name__ == "__main__":
+    main()
