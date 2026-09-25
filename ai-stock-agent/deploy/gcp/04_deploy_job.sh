@@ -38,18 +38,28 @@ echo "========================================="
 echo "Deploying Cloud Run Job: $JOB_NAME"
 echo "========================================="
 
-gcloud run jobs deploy "$JOB_NAME" \
-    --image="${IMAGE_URI}:latest" \
-    --region="$REGION" \
-    --service-account="$RUN_SA_EMAIL" \
-    --clear-volumes \
-    --clear-volume-mounts \
-    --set-env-vars="DATA_BUCKET=${BUCKET_NAME}" \
-    --set-secrets="$SECRETS" \
-    --memory=4Gi \
-    --cpu=2 \
-    --task-timeout=1800 \
-    --max-retries=1
+# Cloud Run Jobs have a fixed ~70 s startup cost, and the machine size adds to
+# it (measured: 1 CPU/1 GiB ~71 s vs 2 CPU/4 GiB ~103 s for a no-op). Full
+# scans need the big machine; the 5-minute stop-loss check only reads a few
+# prices, so it gets its own small job — ~84 runs/day, faster and ~4x cheaper.
+deploy_job() {
+    local name="$1" cpu="$2" mem="$3" timeout="$4"
+    gcloud run jobs deploy "$name" \
+        --image="${IMAGE_URI}:latest" \
+        --region="$REGION" \
+        --service-account="$RUN_SA_EMAIL" \
+        --clear-volumes \
+        --clear-volume-mounts \
+        --set-env-vars="DATA_BUCKET=${BUCKET_NAME}" \
+        --set-secrets="$SECRETS" \
+        --memory="$mem" \
+        --cpu="$cpu" \
+        --task-timeout="$timeout" \
+        --max-retries=1
+}
+
+deploy_job "$JOB_NAME"       2 4Gi 1800
+deploy_job "$LIGHT_JOB_NAME" 1 1Gi 600
 
 echo ""
 echo "Granting Cloud Scheduler's service account permission to run this job..."
@@ -57,10 +67,12 @@ echo "Granting Cloud Scheduler's service account permission to run this job..."
 # body includes overrides.containerOverrides (to pick which scheduled task
 # runs), which needs the run.jobs.runWithOverrides permission — invoker only
 # has plain run.jobs.run and gets a 403 on any request with overrides.
-gcloud run jobs add-iam-policy-binding "$JOB_NAME" \
-    --region="$REGION" \
-    --member="serviceAccount:${SCHEDULER_SA_EMAIL}" \
-    --role="roles/run.developer"
+for job in "$JOB_NAME" "$LIGHT_JOB_NAME"; do
+    gcloud run jobs add-iam-policy-binding "$job" \
+        --region="$REGION" \
+        --member="serviceAccount:${SCHEDULER_SA_EMAIL}" \
+        --role="roles/run.developer" >/dev/null
+done
 
 echo ""
 echo "✓ Job deployed. Test it once manually:"

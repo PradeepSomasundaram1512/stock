@@ -11,12 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements-cloud.txt .
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements-cloud.txt
 
 COPY . .
-RUN chmod +x entrypoint.sh
+RUN chmod +x entrypoint.sh \
+    && python -m compileall -q . >/dev/null
 
 # data/ (portfolio.db, backtest.db, watchlist.txt, vector store) is synced
 # from a GCS bucket at the start and end of every execution — see

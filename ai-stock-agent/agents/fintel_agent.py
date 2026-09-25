@@ -58,9 +58,6 @@ Be specific and cite the actual numbers from the data.
         )
 
 
-# Alias for backwards compatibility
-FintelAgent = InstitutionalAgent
-
     def analyze(self, ticker: str, price_data: Dict = None) -> Dict[str, Any]:
         """
         Perform comprehensive institutional analysis for a stock (FREE).
@@ -302,3 +299,7 @@ if __name__ == "__main__":
             print(f"   {key}: {value}")
 
     print("\n✅ All data from FREE sources (Yahoo Finance, SEC EDGAR)")
+
+
+# Alias for backwards compatibility
+FintelAgent = InstitutionalAgent

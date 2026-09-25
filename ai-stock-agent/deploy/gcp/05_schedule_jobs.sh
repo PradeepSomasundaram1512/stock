@@ -15,10 +15,10 @@
 cd "$(dirname "$0")"
 source ./config.sh
 
-RUN_URI="https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}:run"
+run_uri() { echo "https://${REGION}-run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${1:-$JOB_NAME}:run"; }
 
 create_or_update() {
-    local name="$1" cron="$2" args_json="$3"
+    local name="$1" cron="$2" args_json="$3" job="${4:-$JOB_NAME}"
     local body="{\"overrides\":{\"containerOverrides\":[{\"args\":${args_json}}]}}"
 
     if gcloud scheduler jobs describe "$name" --location="$REGION" >/dev/null 2>&1; then
@@ -29,7 +29,7 @@ create_or_update() {
             --location="$REGION" \
             --schedule="$cron" \
             --time-zone="America/New_York" \
-            --uri="$RUN_URI" \
+            --uri="$(run_uri "$job")" \
             --http-method=POST \
             --oauth-service-account-email="$SCHEDULER_SA_EMAIL" \
             --update-headers="Content-Type=application/json" \
@@ -40,7 +40,7 @@ create_or_update() {
             --location="$REGION" \
             --schedule="$cron" \
             --time-zone="America/New_York" \
-            --uri="$RUN_URI" \
+            --uri="$(run_uri "$job")" \
             --http-method=POST \
             --oauth-service-account-email="$SCHEDULER_SA_EMAIL" \
             --headers="Content-Type=application/json" \
@@ -57,7 +57,7 @@ create_or_update "stock-scanner-premarket-brief"  "0 9 * * 1-5"   '["--premarket
 create_or_update "stock-scanner-gap-scan"         "45 9 * * 1-5"  '["--gap-scan"]'
 create_or_update "stock-scanner-go-no-go"         "50 9 * * 1-5"  '["--go-no-go"]'
 create_or_update "stock-scanner-hourly-scan"      "0 10-15 * * 1-5" '["--hourly-scan"]'
-create_or_update "stock-scanner-stop-loss-check"  "*/5 9-16 * * 1-5" '["--stop-loss-check"]'
+create_or_update "stock-scanner-stop-loss-check"  "*/5 9-16 * * 1-5" '["--stop-loss-check"]' "$LIGHT_JOB_NAME"
 create_or_update "stock-scanner-closing-recap"    "45 15 * * 1-5" '["--closing-recap"]'
 create_or_update "stock-scanner-swing-trade"      "5 10 * * 1-5"  '["--swing-trade"]'
 

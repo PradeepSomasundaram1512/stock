@@ -208,6 +208,46 @@ gsutil ls gs://YOUR_PROJECT_ID-stock-scanner-data
 
 ---
 
+## ⚡ Performance, cost and failure alerts (measured)
+
+**Why every run takes ~1.5-2.5 minutes.** Cloud Run Jobs have a fixed startup
+cost. A no-op `echo` job takes ~73 s even on Google's tiny sample image, and
+neither our image size nor the 28 Secret Manager env vars changed that
+(measured with throwaway probe jobs: slim image, with/without secrets, all
+~1m43s at 2 CPU/4 GiB and ~71 s at 1 CPU/1 GiB). Machine size does add to it, so:
+
+- `stock-scanner` (2 CPU / 4 GiB) runs the scans, briefs and swing trader.
+- `stock-scanner-light` (1 CPU / 1 GiB) runs only the 5-minute stop-loss
+  check (~84 runs/day), which just reads a few prices.
+- The container image dropped from 1.4 GB to 390 MB by installing
+  `requirements-cloud.txt` (no TensorFlow/xgboost/scikit-learn/scipy/
+  matplotlib/plotly — only offline analysis code imports them).
+- `entrypoint.sh` warms the scanner import in the background (it takes ~20 s
+  on Cloud Run's slow sandbox filesystem vs 1.6 s on a laptop) so it overlaps
+  the lock wait/state download instead of extending how long the lock is held.
+
+If alert latency ever matters more than simplicity, the next step is serving
+the stop-loss check from a Cloud Run *service* (seconds to cold-start, not
+~70 s) instead of a job.
+
+**Cost.** Stop-loss runs use roughly 185k vCPU-seconds/month on the light job,
+which falls inside Cloud Run's free tier (240k vCPU-s and 450k GiB-s per
+month); everything else adds ~80k vCPU-s. Compute is effectively $0-2/month —
+the OpenAI/news API calls are the real spend, so duplicate senders (see the
+AWS decommission note below) cost far more than the infrastructure.
+
+**Failure alerts.** Any failed run — the job itself, the state sync/lock, or
+the final upload — posts a Discord message with the exit code, attempt number
+and a link to that execution's logs (`deploy/gcp/notify_failure.py`, called
+from `entrypoint.sh`). Failures inside the container are covered; failures
+before the container runs (image pull, OOM-kill) are not, so still glance at
+`gcloud run jobs executions list` if the channel goes quiet.
+
+**Archive.** Data from the retired AWS instance (3,507 recommendations from
+2026-01-06 to 2026-09-24, plus its logs) and the pre-merge GCP database live
+in `gs://<project>-stock-scanner-archive/`, deliberately outside the synced
+data bucket. The live `backtest.db` already contains the merged history.
+
 ## 🆘 Troubleshooting
 
 **Job execution fails immediately** — check logs (above). Most common cause:

@@ -14,6 +14,7 @@ IMAGE_NAME="stock-scanner"
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
 
 JOB_NAME="stock-scanner"
+LIGHT_JOB_NAME="stock-scanner-light"
 BUCKET_NAME="${PROJECT_ID}-stock-scanner-data"
 
 RUN_SA_NAME="stock-scanner-run"
