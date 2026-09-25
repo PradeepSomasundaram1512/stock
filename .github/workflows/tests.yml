@@ -1,0 +1,34 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-stock-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the cloud image's light dependencies
+        run: pip install pandas numpy yfinance requests google-auth google-cloud-storage
+      - name: Python compiles
+        run: python -m compileall -q audit_core.py forward_test.py market_snapshot.py scan_universe.py track_record.py daily_digest.py shadow.py dashboard tests deploy/gcp
+      - name: Shell scripts parse
+        run: for f in entrypoint.sh deploy/gcp/*.sh; do bash -n "$f" || exit 1; done
+      - name: Dashboard JavaScript parses
+        run: python tests/check_frontend.py
+      - name: Dashboard sign-in, security and endpoint tests
+        run: python dashboard/test_auth.py
+      - name: Market clock tests
+        run: python dashboard/test_market_clock.py
+      - name: Track-record chain tests
+        run: python tests/test_track_record.py
+      - name: Scan-universe tests
+        run: python tests/test_scan_universe.py
