@@ -333,3 +333,16 @@ additive: new `--hourly-scan` / `--premarket-brief` / `--gap-scan` /
 flags on `ultimate_market_scanner.py` alongside the existing `--scan-now` and
 `--monitor`, so the EC2 systemd service keeps working unmodified if you ever
 want to go back.
+
+## Daily health digest
+
+`stock-scanner-daily-digest` (16:20 ET, Mon-Fri, light job) runs `daily_digest.py` via `entrypoint.sh --digest`
+and posts one Discord message per day: scans run, candidates analysed, how many were answered by the model vs.
+fell back to HOLD, BUY count, top ranked signals, and the shadow model's agreement and cost. The title is
+✅ under a 10% fallback rate, ⚠️ above it, ℹ️ on days with no decisions (market holidays). Run it by hand with
+`python daily_digest.py --print` against a downloaded `backtest.db`.
+
+## Rule baselines
+
+`paper_baselines.py` compares the LLM's BUY signals with momentum, reversal, low-volatility and equal-weight
+rules that pick the same number of stocks on the same dates from the fixed S&P 500 pool (`paper_results/baselines.json`).
