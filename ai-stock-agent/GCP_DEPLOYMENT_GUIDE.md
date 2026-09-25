@@ -354,8 +354,19 @@ rules that pick the same number of stocks on the same dates from the fixed S&P 5
 2 minutes) and shows: today's model health, the latest scan's candidates with the production and shadow
 decisions and the model's reasoning, per-day health and BUY-count charts, the paper account, and swing trades, with open positions marked to the last Yahoo price (60 s cache; falls back to
 cost if a quote is unavailable).
-It runs as its own service account with `objectViewer` only, and is deployed private. Open it with
+It runs as its own service account with `objectViewer` only.
 
-    gcloud run services proxy stock-dashboard --region=us-central1 --port=8080
+**Access is Google sign-in via Cloud Run IAP, invite-only.** Anyone not on the list is sent to a Google login and
+then refused; there is no public access. Manage the list with
 
-then visit http://localhost:8080. Local development: `DATA_DIR=/path/to/copies python dashboard/server.py`.
+    ./deploy/gcp/dashboard_access.sh list
+    ./deploy/gcp/dashboard_access.sh invite tester@example.com
+    ./deploy/gcp/dashboard_access.sh revoke tester@example.com
+
+Then send the tester the service URL (`gcloud run services describe stock-dashboard --region=us-central1
+--format="value(status.url)"`). Setup notes: IAP needs the `iap` and `cloudresourcemanager` APIs, the annotation
+`run.googleapis.com/iap-enabled: 'true'` on the service, and `roles/run.invoker` for
+`service-<project number>@gcp-sa-iap.iam.gserviceaccount.com`. The local proxy
+(`gcloud run services proxy ...`) still works for the project owner.
+
+Local development: `DATA_DIR=/path/to/copies python dashboard/server.py`.
