@@ -59,3 +59,18 @@ oversold stocks simply bounce more in raw returns. H5 is therefore redefined to 
 Development estimates for the redefined H5 (exploratory): -0.10% in the early window, -0.78% in the late window, -0.30% overall (95% CI -0.92 to +0.35, not
 detectable). The -0.77% seen in the meta-labeling study came from the later, out-of-fold subsample only and is not stable across windows,
 so the development evidence for H5 is weak and the forward test is the real test. No forward outcome had matured when this was written.
+
+## Addendum 3, 2026-09-25 (still before any forward outcome; adds H6, the primary test of selection skill)
+
+Monte-Carlo validation (`paper_power.py`, `paper_sensitivity.py`) found that the ten-day matched placebo is **biased for extreme oversold picks**: fake
+"LLMs" with no skill, picking at random from the 50 lowest-RSI names, earn about +0.27 percentage points over their matched placebo (SD 0.19 pp over 500
+fake LLMs), so the right zero for a selection-skill test is not zero. (The intraday placebo is unbiased, +0.002%.) The forward test therefore adds a
+bias-corrected primary test and fixes its definition here, before any forward outcome exists and without reference to forward data:
+
+- **H6 (primary test of ten-day selection skill).** Let alpha_i = CAR_i minus the mean CAR of the K = 10 nearest non-selected pool stocks (RSI, 20-day
+  momentum, ATR% space, as in the paper). Let b be the mean of alpha over 200 seeded no-skill fake pickers evaluated on the SAME dates of the evaluated window
+  (on each date with real BUYs, the same number of stocks drawn at random from the 50 lowest daily-RSI pool stocks, compared with the identical placebo).
+  H6: mean(alpha_i) - b differs from 0 (two-sided), with the same block bootstrap applied to alpha_i - b. Fake pickers are re-drawn (seeded) at every evaluation
+  because the window grows. Limitation stated in advance: b depends on the fake-picker pool (50 lowest daily RSI), which only approximates the real pre-screen.
+- H1 to H5 are unchanged. The family for the Holm adjustment becomes H1 to H6.
+- The intraday horizon is not part of the forward test (the deployed intraday result is validated as unbiased and is reported as a development result).
