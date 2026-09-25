@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scanner">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Scanner Dashboard</title>
 <style>
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6675;--line:#e3e6ec;--ok:#1a8f4d;--warn:#d98200;--bad:#c62828;--acc:#2f5fd0;--buy:#1a8f4d;--sell:#c62828}
@@ -44,6 +53,55 @@ a.t{color:var(--acc);cursor:pointer;text-decoration:none;font-weight:600}
 .badge.ok{border-color:var(--ok)}.badge.bad{border-color:var(--bad)}
 .finding{border-left:4px solid var(--acc);padding:8px 12px;background:color-mix(in srgb,var(--acc) 6%,transparent);border-radius:6px;margin:8px 0;font-size:13px}
 #err{display:none;background:var(--card);border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:10px;margin-bottom:12px}
+
+/* ---- iOS / touch ---- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.wrap{padding-top:max(16px,env(safe-area-inset-top))}
+button,a,select,summary,.row{touch-action:manipulation}
+input,select{font-size:16px}                       /* 16px stops iOS Safari zooming the page when a field is focused */
+.tblwrap{-webkit-overflow-scrolling:touch}
+@media (pointer:coarse){button,select,input{min-height:44px;min-width:44px}th,td{padding:10px 8px}.hm-tile{min-height:0;min-width:0}
+  a.t{display:inline-block;padding:14px 8px;margin:-14px -8px}                     /* ticker links: 44px tap area without changing the row height */
+  .seg button{min-width:48px}}
+button.x,.sheet-head .x{min-width:44px}
+/* ---- live bar ---- */
+.live{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.live .spacer{flex:1}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mute);margin-right:6px}
+.dot.open{background:var(--ok);box-shadow:0 0 0 0 rgba(26,143,77,.6);animation:pulse 2s infinite}.dot.premarket,.dot.afterhours{background:var(--warn)}.dot.holiday,.dot.closed{background:var(--mute)}
+@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(26,143,77,0)}100%{box-shadow:0 0 0 0 rgba(26,143,77,0)}}
+@media (prefers-reduced-motion:reduce){.dot.open{animation:none}}
+/* ---- toasts, bottom sheet ---- */
+#toasts{position:fixed;left:12px;right:12px;top:max(12px,env(safe-area-inset-top));z-index:60;display:flex;flex-direction:column;gap:8px;pointer-events:none;align-items:center}
+.toast{pointer-events:auto;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:420px}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+.sheet[hidden]{display:none}
+.sheet-head{display:flex;align-items:baseline;gap:6px;margin-bottom:8px;font-size:18px}.sheet-head .x{margin-left:auto}
+.sheet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin:8px 0 12px}
+.sheet-actions{display:flex;gap:8px;flex-wrap:wrap}
+button.x{min-width:36px;padding:2px 8px}
+/* ---- segmented control, heatmap, sectors, chart ---- */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}.seg button{border:0;border-radius:0;background:none;padding:5px 12px;color:var(--mute)}.seg button.on{background:var(--acc);color:#fff}
+button.cmp.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.heatmap{position:relative;width:100%;border-radius:8px;overflow:hidden;background:var(--line)}
+.hm-sec{position:absolute;overflow:hidden;background:var(--card)}
+.hm-label{position:absolute;left:4px;top:0;height:15px;font-size:10px;line-height:15px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;pointer-events:none}
+.hm-tile{position:absolute;border:0;border-radius:2px;padding:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;overflow:hidden;cursor:pointer}
+.hm-tile span{font-size:.8em;opacity:.95}.hm-tile.analysed{box-shadow:inset 0 0 0 2px var(--acc)}
+.sec-row{display:grid;grid-template-columns:minmax(110px,1.3fr) 2fr 56px;gap:8px;align-items:center;margin:5px 0;font-size:13px}.sec-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sec-bar{display:block;height:8px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}.sec-bar i{position:absolute;top:0;bottom:0}.sec-bar i.pos{left:0;background:var(--ok)}.sec-bar i.neg{left:0;background:var(--bad)}.sec-val{text-align:right}
+.chartbox{min-height:260px}.chart-read{min-height:20px;margin:4px 0;font-variant-numeric:tabular-nums}
+.flash-up{animation:fu 1s}.flash-down{animation:fd 1s}
+@keyframes fu{from{background:rgba(26,143,77,.35)}to{background:transparent}}@keyframes fd{from{background:rgba(198,40,40,.35)}to{background:transparent}}
+/* ---- phones: bottom tab bar, thumb reachable ---- */
+@media (max-width:700px){
+  nav{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:40;background:var(--card);border-top:1px solid var(--line);border-bottom:0;padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);justify-content:space-around;overflow:visible}
+  nav button{flex:1;padding:12px 2px 10px;font-size:11px;border-bottom:0;border-top:2px solid transparent;min-width:0}
+  nav button.on{border-bottom-color:transparent;border-top-color:var(--acc)}
+  .wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  h1{font-size:18px}.kpi .v{font-size:19px}
+  .live{font-size:12px}.live .spacer{display:none}
+}
 </style>
 </head>
 <body>
@@ -54,10 +112,15 @@ a.t{color:var(--acc);cursor:pointer;text-decoration:none;font-weight:600}
 </header>
 <div class="banner">Research and paper-trading tool. Nothing here is investment advice and no real orders are placed. Model output is often wrong; see the Scoreboard tab for how well it has actually done.</div>
 <div id="err"></div>
+<div class="live" id="live" aria-live="off">
+  <span><span class="dot" id="sdot"></span><b id="slabel">…</b></span><span class="mute" id="scount"></span>
+  <span class="mute" id="nextscan"></span><span class="mute" id="lastscan"></span><span class="spacer"></span>
+  <span id="spy"></span><span id="vix"></span><button id="alerts" class="small" hidden>Enable alerts</button>
+</div>
 <div class="grid kpis" id="ctx"></div>
 
 <nav id="tabs">
-  <button data-tab="overview">Overview</button><button data-tab="history">History</button>
+  <button data-tab="overview">Overview</button><button data-tab="markets">Markets</button><button data-tab="history">History</button>
   <button data-tab="scoreboard">Scoreboard</button><button data-tab="arena">Model arena</button>
 </nav>
 
@@ -74,6 +137,23 @@ a.t{color:var(--acc);cursor:pointer;text-decoration:none;font-weight:600}
   <div class="grid two">
     <div class="card"><h2>Paper account</h2><div id="paperacct"></div><div class="tblwrap"><table id="positions"></table></div></div>
     <div class="card"><h2>Swing trades</h2><div class="tblwrap"><table id="swing"></table></div></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-markets">
+  <div class="card">
+    <div class="toolbar"><h2 style="margin:0">Market heatmap</h2>
+      <div class="seg" id="hmmode"><button data-m="c" class="on">1D</button><button data-m="c5">5D</button><button data-m="rsi">RSI</button></div>
+      <span class="mute small" id="hmmeta"></span></div>
+    <div id="heatmap" class="heatmap"></div>
+    <div class="mute small" id="hmlegend" style="margin-top:8px"></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h2>Sectors <span class="mute small">(average move)</span></h2><div id="sectorbars"></div></div>
+    <div class="card"><h2>Your watchlist</h2>
+      <form id="wform" class="toolbar"><input id="winput" placeholder="Add ticker, e.g. NVDA" size="14" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false"><button type="submit">Add</button></form>
+      <div class="tblwrap"><table id="wtable"></table></div>
+      <div class="mute small">Saved in this browser only.</div></div>
   </div>
 </section>
 
@@ -94,7 +174,9 @@ a.t{color:var(--acc);cursor:pointer;text-decoration:none;font-weight:600}
 <section class="tab" id="tab-arena"><div id="arenaout"></div></section>
 </div>
 
+<div id="toasts"></div><div id="sheet" class="sheet" hidden></div>
 <script src="/charts.js"></script>
+<script src="/live.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); kids.forEach(k => e.append(k)); return e; };
@@ -176,17 +258,7 @@ async function loadOverview() {
   const recent = a => a.slice(-45);
   stacked($("#healthchart"), recent(h.health).map(d => ({...d, ok: d.ok || 0, fallbacks: d.fallbacks || 0})), [["ok", "var(--ok)"], ["fallbacks", "var(--bad)"]]);
   stacked($("#buychart"), recent(h.recommendations).map(d => ({...d, other: d.n - (d.buys || 0)})), [["buys", "var(--buy)"], ["other", "var(--line)"]]);
-  const ps = p.paper_summary, acct = $("#paperacct"), mkx = p.marks || {}; acct.replaceChildren();
-  if (ps) { const cls = ps.pnl >= 0 ? "ok" : "bad";
-    acct.append(el("div", {className: "kpi"}, el("div", {className: "v " + cls, textContent: usd(ps.equity)}),
-      el("div", {className: "l", textContent: `Equity, ${(ps.pnl >= 0 ? "+" : "") + usd(ps.pnl)} (${(ps.pnl / ps.starting * 100).toFixed(2)}%) vs ${usd(ps.starting)} start · cash ${usd(ps.cash)} · ` + (ps.all_marked ? "marked to last price" : "some positions at cost (no quote)")}))); }
-  const pos = p.paper ? Object.entries(p.paper.positions).map(([t, v]) => ({t, ...v, last: mkx[t]})) : [];
-  dataTable($("#positions"), [{label: "Ticker", cell: x => tickLink(x.t)}, {label: "Shares", r: 1, cell: x => x.shares}, {label: "Avg", r: 1, cell: x => usd(x.avg_price)}, {label: "Last", r: 1, cell: x => usd(x.last)},
-    {label: "P/L", r: 1, cell: x => x.last ? ((x.last / x.avg_price - 1) * 100).toFixed(1) + "%" : "–"}], pos, {empty: "No open paper positions."});
-  const sw = p.swing ? [...Object.values(p.swing.open_trades).map(x => ({...x, st: "open", last: mkx[x.ticker]})), ...p.swing.closed_trades.map(x => ({...x, st: "closed"}))] : [];
-  const out = x => x.exit_price || x.last;
-  dataTable($("#swing"), [{label: "Ticker", cell: x => tickLink(x.ticker)}, {label: "Status", cell: x => x.st}, {label: "Entry", cell: x => x.entry_date}, {label: "In", r: 1, cell: x => usd(x.entry_price)},
-    {label: "Out / last", r: 1, cell: x => usd(out(x))}, {label: "P/L", r: 1, cell: x => out(x) ? ((out(x) / x.entry_price - 1) * 100).toFixed(1) + "%" : "–"}], sw, {empty: "No swing trades yet."});
+  paperData = p; renderPaper();
 }
 
 /* ---------- history ---------- */
@@ -209,8 +281,8 @@ async function lookup() {
   const t = $("#tickin").value.trim().toUpperCase(); if (!t) return pickScan();
   const d = await get("/api/ticker?t=" + encodeURIComponent(t));
   histRows = d.decisions; histName = "ticker_" + t; $("#histmeta").textContent = `${t}${d.last ? " · last " + usd(d.last) : ""}`;
-  const out = $("#histout"); out.replaceChildren();
-  if (!d.decisions.length && !d.recommendations.length) { out.textContent = "No decisions logged for " + t + "."; return; }
+  const out = $("#histout"); out.replaceChildren(chartCard(t));
+  if (!d.decisions.length && !d.recommendations.length) { out.append(el("p", {className: "mute", textContent: "No model decisions logged for " + t + " yet."})); return; }
   out.append(el("h3", {textContent: "Model decisions (latest first)"}));
   const t1 = el("table"); out.append(el("div", {className: "tblwrap"}, t1));
   dataTable(t1, [{key: "decided_at", label: "When (UTC)", cell: r => r.decided_at.slice(0, 16).replace("T", " ")}, {label: "Model", cell: r => pill(r.decision)}, {key: "confidence", label: "Conf", r: 1, cell: r => pct(r.confidence)},
@@ -277,7 +349,7 @@ async function loadArena() {
 }
 
 /* ---------- tabs ---------- */
-const LOADERS = {overview: loadOverview, history: loadHistory, scoreboard: loadScoreboard, arena: loadArena}, loaded = {};
+const LOADERS = {overview: loadOverview, markets: loadMarkets, history: loadHistory, scoreboard: loadScoreboard, arena: loadArena}, loaded = {};
 function showTab(name, force) {
   if (!LOADERS[name]) name = "overview";
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
@@ -292,7 +364,7 @@ fetch("/api/me").then(r => r.json()).then(j => { if (j.email && j.email !== "dev
 $("#tickin").onkeydown = e => e.key === "Enter" && lookup().catch(fail);
 $("#theme").onclick = () => { const r = document.documentElement, d = getComputedStyle(r).getPropertyValue("--bg").trim() === "#0e1116"; r.dataset.theme = d ? "light" : "dark"; };
 window.onhashchange = () => showTab(location.hash.slice(1));
-refresh(); setInterval(refresh, 300000);
+initMarkets(); refresh(); startLive(); setInterval(() => { if (!document.hidden) refresh(); }, 600000);
 </script>
 </body>
 </html>

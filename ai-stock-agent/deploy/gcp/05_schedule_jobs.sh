@@ -62,6 +62,8 @@ create_or_update "stock-scanner-stop-loss-check"  "*/15 9-16 * * 1-5" '["--stop-
 create_or_update "stock-scanner-closing-recap"    "45 15 * * 1-5" '["--closing-recap"]'
 create_or_update "stock-scanner-daily-digest"     "20 16 * * 1-5" '["--digest"]' "$LIGHT_JOB_NAME"
 create_or_update "stock-scanner-forward-test"    "0 9 * * 6"     '["--forward-test"]'
+# Feeds the dashboard heatmap: one batched download of the whole universe, every 30 min in market hours.
+create_or_update "stock-scanner-market-snapshot" "*/30 9-16 * * 1-5" '["--market-snapshot"]' "$LIGHT_JOB_NAME"
 create_or_update "stock-scanner-swing-trade"      "5 10 * * 1-5"  '["--swing-trade"]'
 
 echo ""

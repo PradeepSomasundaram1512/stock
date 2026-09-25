@@ -14,6 +14,8 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 TMP = tempfile.mkdtemp()
+Path(f"{TMP}/market_snapshot.json").write_text(json.dumps({"asof": "2099-01-01T00:00:00+00:00", "n": 2, "missing": [], "stocks": {
+    "AAPL": {"p": 1.0, "c": 0.01, "c5": 0.02, "rsi": 55.0, "dv": 1e9, "d": "2026-09-25"}, "ZZZZ": {"p": 2.0, "c": -0.02, "c5": 0.0, "rsi": None, "dv": 1e6, "d": "2026-09-25"}}}))
 sqlite3.connect(f"{TMP}/backtest.db").executescript(
     "create table llm_decisions(decided_at text, scan_id text, llm_status text, raw_decision text, in_signal_list int, ticker text);"
     "create table recommendations(recommendation_date text, decision text, ticker text, market_trend text);")
@@ -139,6 +141,47 @@ class HttpTests(unittest.TestCase):
             self.assertNotEqual(call(self.base, path)[0], 200, path)
         self.assertEqual(call(self.base, "/api/summary")[0], 401)
         self.assertEqual(call(self.base, "/api/latest")[0], 401)
+
+    def test_ticker_input_is_validated_before_it_reaches_an_outbound_url(self):
+        bad = "AAPL,../../etc/passwd,a b,AAPL?x=1,<script>,,TOOLONGTICKER1,MSFT,AAPL"
+        self.assertEqual(server._clean_tickers(bad), ["AAPL", "MSFT"])                   # deduped, junk dropped
+        self.assertEqual(len(server._clean_tickers(",".join(f"T{i}" for i in range(100)))), 40)
+        self.assertEqual(server._clean_tickers("^VIX,BRK-B"), ["^VIX", "BRK-B"])
+
+    def test_chart_rejects_bad_ticker_and_range(self):
+        c = self.cookie("alice@example.com")
+        self.assertIn("error", json.loads(call(self.base, "/api/chart?t=../x", c)[1]))
+        self.assertIn("error", json.loads(call(self.base, "/api/chart?t=AAPL&range=99y", c)[1]))
+
+    def test_heatmap_joins_sectors_and_marks_unknown_as_other(self):
+        code, body, _ = call(self.base, "/api/heatmap", self.cookie("alice@example.com"))
+        d = json.loads(body)
+        self.assertEqual(code, 200)
+        by = {x["t"]: x for x in d["stocks"]}
+        self.assertNotEqual(by["AAPL"]["sector"], "Other")                              # real sector from sectors.json
+        self.assertEqual(by["ZZZZ"]["sector"], "Other")
+        self.assertEqual({s["name"] for s in d["sectors"]}, {by["AAPL"]["sector"], "Other"})
+
+    def test_redirect_login_requires_matching_csrf_token_and_a_valid_google_token(self):
+        def post(form, cookie=None):
+            req = urllib.request.Request(self.base + "/auth/google", data=form.encode(), method="POST",
+                                         headers={"Content-Type": "application/x-www-form-urlencoded", **({"Cookie": cookie} if cookie else {})})
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *a, **k):
+                    return None
+            try:
+                r = urllib.request.build_opener(NoRedirect).open(req)
+                return r.status, r.headers
+            except urllib.error.HTTPError as e:
+                return e.code, e.headers
+        self.assertEqual(post("credential=x")[0], 400)                                           # no CSRF token at all
+        self.assertEqual(post("credential=x&g_csrf_token=abc", "g_csrf_token=different")[0], 400)   # mismatch
+        code, h = post("credential=junk&g_csrf_token=abc", "g_csrf_token=abc")                      # CSRF ok, token invalid
+        self.assertEqual((code, h.get("Location")), (303, "/?denied=1"))
+        self.assertIsNone(h.get("Set-Cookie"))
+
+    def test_app_install_assets_are_public(self):
+        self.assertIn(call(self.base, "/manifest.webmanifest")[0], (200, 404))                   # 404 only if not generated yet
 
     def test_dev_bypass_is_off(self):
         self.assertFalse(server.DEV_NO_AUTH)

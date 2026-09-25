@@ -27,3 +27,66 @@ function calibChart(target, bins, w = 420, h = 300) {
   target.replaceChildren(svg);
 }
 
+
+/* ---------- candlestick chart ----------
+   candles: [[ts_ms, o, h, l, c, v], ...]; opts: {markers:[{ts,kind,label,detail}], levels:[{price,label,color}], cmp:[[ts,close]...],
+   onScrub(candle|null)}. Pointer Events, so it scrubs with a finger on iOS; vertical swipes still scroll the page (touch-action: pan-y). */
+function candleChart(target, candles, opts = {}) {
+  target.replaceChildren();
+  if (!candles || candles.length < 2) { target.append(Object.assign(document.createElement("div"), {className: "mute small", textContent: "No chart data available."})); return; }
+  const W = Math.max(300, target.clientWidth || 600), H = Math.round(Math.min(420, Math.max(260, W * 0.55))), pad = {l: 8, r: 46, t: 8, b: 20}, vh = 46;
+  const svg = mk("svg", {viewBox: `0 0 ${W} ${H}`, style: "touch-action:pan-y;user-select:none;-webkit-user-select:none;height:" + H + "px"});
+  const n = candles.length, cw = (W - pad.l - pad.r) / n, X = i => pad.l + (i + 0.5) * cw;
+  const plotH = H - pad.t - pad.b - vh;
+  let lo = Math.min(...candles.map(c => c[3])), hi = Math.max(...candles.map(c => c[2]));
+  const cmp = opts.cmp && opts.cmp.length > 1 ? opts.cmp : null;
+  let cmpPts = null;
+  if (cmp) { const base = candles[0][4], c0 = cmp[0][1]; cmpPts = candles.map(c => { let j = 0; while (j + 1 < cmp.length && cmp[j + 1][0] <= c[0]) j++; return base * cmp[j][1] / c0; }); lo = Math.min(lo, ...cmpPts); hi = Math.max(hi, ...cmpPts); }
+  (opts.levels || []).forEach(l => { lo = Math.min(lo, l.price); hi = Math.max(hi, l.price); });
+  const span = (hi - lo) || 1; lo -= span * 0.04; hi += span * 0.04;
+  const Y = v => pad.t + (hi - v) / (hi - lo) * plotH, vmax = Math.max(1, ...candles.map(c => c[5] || 0));
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || "#888";
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); svg.append(mk("line", {x1: pad.l, x2: W - pad.r, y1: y, y2: y, stroke: "var(--line)"}), mk("text", {x: W - pad.r + 4, y: y + 3, fill: "var(--mute)", "font-size": 10}, v >= 100 ? v.toFixed(0) : v.toFixed(2))); }
+  const intraday = candles[1][0] - candles[0][0] < 86400000 * 0.9, fmt = ts => { const d = new Date(ts); return intraday ? d.toLocaleDateString(undefined, {month: "short", day: "numeric"}) : d.toLocaleDateString(undefined, {month: "short", year: n > 130 ? "2-digit" : undefined, day: n > 130 ? undefined : "numeric"}); };
+  [0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1].forEach((i, k) => svg.append(mk("text", {x: X(i), y: H - 5, fill: "var(--mute)", "font-size": 10, "text-anchor": k === 0 ? "start" : k === 3 ? "end" : "middle"}, fmt(candles[i][0]))));
+  const up = css("--buy"), dn = css("--sell");
+  candles.forEach((c, i) => {
+    const col = c[4] >= c[1] ? up : dn, x = X(i), bw = Math.max(1, cw * 0.7);
+    svg.append(mk("line", {x1: x, x2: x, y1: Y(c[2]), y2: Y(c[3]), stroke: col, "stroke-width": 1}),
+      mk("rect", {x: x - bw / 2, y: Math.min(Y(c[1]), Y(c[4])), width: bw, height: Math.max(1, Math.abs(Y(c[1]) - Y(c[4]))), fill: col}),
+      mk("rect", {x: x - bw / 2, y: H - pad.b - (c[5] || 0) / vmax * vh, width: bw, height: (c[5] || 0) / vmax * vh, fill: col, opacity: .3}));
+  });
+  if (cmpPts) svg.append(mk("polyline", {points: cmpPts.map((v, i) => `${X(i)},${Y(v)}`).join(" "), fill: "none", stroke: "var(--acc)", "stroke-width": 1.5, opacity: .9}));
+  (opts.levels || []).forEach(l => svg.append(mk("line", {x1: pad.l, x2: W - pad.r, y1: Y(l.price), y2: Y(l.price), stroke: l.color, "stroke-dasharray": "5 4", "stroke-width": 1.2}),
+    mk("text", {x: pad.l + 3, y: Y(l.price) - 3, fill: l.color, "font-size": 10, "font-weight": 600}, l.label)));
+  const idxAt = ts => { let j = -1; for (let i = 0; i < n; i++) if (candles[i][0] <= ts) j = i; else break; return j; };
+  (opts.markers || []).forEach(m => { const i = idxAt(m.ts); if (i < 0) return; const buy = /BUY/.test(m.kind), x = X(i), y = buy ? Y(candles[i][3]) + 10 : Y(candles[i][2]) - 10, s = 5;
+    const tri = mk("polygon", {points: buy ? `${x},${y - s} ${x - s},${y + s} ${x + s},${y + s}` : `${x},${y + s} ${x - s},${y - s} ${x + s},${y - s}`, fill: buy ? up : dn, stroke: "var(--card)", "stroke-width": 1});
+    tri.append(mk("title", {}, m.detail || m.kind)); svg.append(tri); });
+  const cross = mk("line", {y1: pad.t, y2: H - pad.b, stroke: "var(--mute)", "stroke-dasharray": "3 3", visibility: "hidden"});
+  svg.append(cross);
+  const move = ev => { const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W, i = Math.max(0, Math.min(n - 1, Math.floor((x - pad.l) / cw)));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible"); if (opts.onScrub) opts.onScrub(candles[i], i); };
+  const leave = () => { cross.setAttribute("visibility", "hidden"); if (opts.onScrub) opts.onScrub(null); };
+  svg.addEventListener("pointermove", move); svg.addEventListener("pointerdown", move); svg.addEventListener("pointerleave", leave); svg.addEventListener("pointerup", ev => { if (ev.pointerType !== "mouse") leave(); });
+  target.append(svg);
+}
+
+/* ---------- squarified treemap ----------
+   items: [{value, ...}] sorted by value desc; returns items with x,y,w,h filling the rectangle (Bruls et al.). */
+function squarify(items, x, y, w, h) {
+  const total = items.reduce((s, i) => s + i.value, 0), out = [];
+  if (!items.length || total <= 0 || w <= 0 || h <= 0) return out;
+  const scale = w * h / total, nodes = items.map(i => ({...i, area: i.value * scale}));
+  let rest = nodes.slice(), rx = x, ry = y, rw = w, rh = h;
+  const worst = (row, side) => { const s = row.reduce((a, b) => a + b.area, 0), mx = Math.max(...row.map(r => r.area)), mn = Math.min(...row.map(r => r.area)); return Math.max(side * side * mx / (s * s), s * s / (side * side * mn)); };
+  while (rest.length) {
+    const side = Math.min(rw, rh); let row = [rest[0]], i = 1;
+    while (i < rest.length && worst([...row, rest[i]], side) <= worst(row, side)) row.push(rest[i++]);
+    rest = rest.slice(row.length);
+    const s = row.reduce((a, b) => a + b.area, 0);
+    if (rw >= rh) { const cwid = s / rh; let cy = ry; row.forEach(r => { const hh = r.area / cwid; out.push({...r, x: rx, y: cy, w: cwid, h: hh}); cy += hh; }); rx += cwid; rw -= cwid; }
+    else { const chei = s / rw; let cx = rx; row.forEach(r => { const ww = r.area / chei; out.push({...r, x: cx, y: ry, w: ww, h: chei}); cx += ww; }); ry += chei; rh -= chei; }
+  }
+  return out;
+}

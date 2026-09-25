@@ -10,6 +10,9 @@ endpoints computed from the same files the scheduled jobs write to the GCS bucke
     /api/scans     list of recent scans;  /api/latest?scan=ID  one scan's candidates
     /api/tickers   tickers seen;  /api/ticker?t=XYZ  one ticker's decision history
     /api/arena     production vs. shadow model: agreement, disagreements, moves since
+    /api/pulse     cheap live poll: market session, next scans, last scan, position prices
+    /api/quotes?t=A,B  batch quotes;  /api/chart?t=X&range=6mo  candles + the model's calls
+    /api/heatmap   whole-universe snapshot by sector (from market_snapshot.json)
     /api/scoreboard  forward-audit results (static, from scoreboard.json) + live outcomes
 
 PUBLIC (no sign-in; an explicit allowlist, aggregate/delayed data only, never the live decision database):
@@ -40,10 +43,11 @@ HERE = Path(__file__).parent
 import sys
 sys.path.insert(0, str(HERE))
 import auth
+import market_clock
 CACHE = Path(os.environ.get("DATA_DIR") or "/tmp/dashboard-data")
-CACHE_TTL = int(os.environ.get("CACHE_TTL", "120"))
+CACHE_TTL = int(os.environ.get("CACHE_TTL", "60"))
 FILES = ("backtest.db", "paper_trades.json", "swing_trades.json", "forward_test.json",
-         "track_record_chain.json", "public_revealed.csv")
+         "track_record_chain.json", "public_revealed.csv", "market_snapshot.json")
 _lock = threading.Lock()
 _fetched = 0.0
 
@@ -185,6 +189,111 @@ def paper() -> dict:
     return out
 
 
+TICKER_RE = __import__("re").compile(r"^[A-Z0-9.\-^]{1,10}$")
+
+
+def _clean_tickers(raw: str, limit: int = 40) -> list:
+    out = []
+    for t in (raw or "").upper().split(","):
+        t = t.strip()
+        if TICKER_RE.match(t) and t not in out:
+            out.append(t)
+    return out[:limit]
+
+
+def pulse(q=None) -> dict:
+    """Cheap poll for the live feel: market session, next scheduled runs, latest scan, position prices."""
+    con = db()
+    last = con.execute("select max(decided_at) from llm_decisions").fetchone()[0]
+    day = (last or "")[:10]
+    scans_today = con.execute("select count(distinct scan_id) from llm_decisions where decided_at like ?", (day + "%",)).fetchone()[0] if last else 0
+    held = []
+    for name, key in (("paper_trades.json", "positions"), ("swing_trades.json", "open_trades")):
+        f = CACHE / name
+        if f.exists():
+            held += list((json.loads(f.read_text()).get(key) or {}))
+    px = marks(held + ["SPY", "^VIX"], ttl=15)
+    metas = {t: _meta(t, 15) for t in set(held) | {"SPY", "^VIX"}}
+    return {"now": datetime.now(timezone.utc).isoformat(timespec="seconds"), "session": market_clock.session(),
+            "next": market_clock.next_events(limit=4), "last_scan_at": last, "scans_today": scans_today,
+            "marks": {t: ({"price": m["price"], "prev": m.get("prev")} if m else None) for t, m in metas.items()}}
+
+
+def quotes(q=None) -> dict:
+    ts = _clean_tickers((q or {}).get("t", ""))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        metas = dict(zip(ts, pool.map(lambda t: _meta(t, 15), ts)))
+    return {"quotes": {t: ({"price": m["price"], "prev": m.get("prev")} if m else None) for t, m in metas.items()}}
+
+
+_CHARTS: dict = {}          # (ticker, range) -> (fetched_at, candles)
+RANGES = {"5d": "15m", "1mo": "60m", "3mo": "1d", "6mo": "1d", "1y": "1d"}
+
+
+def _candles(t: str, rng: str):
+    hit = _CHARTS.get((t, rng))
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    from urllib.parse import quote
+    try:
+        req = urllib.request.Request(f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(t)}?range={rng}&interval={RANGES[rng]}",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            res = json.load(r)["chart"]["result"][0]
+        q0 = res["indicators"]["quote"][0]
+        rows = [[ts * 1000, o, h, l, c, v] for ts, o, h, l, c, v in zip(res["timestamp"], q0["open"], q0["high"], q0["low"], q0["close"], q0["volume"])
+                if None not in (o, h, l, c)]
+    except Exception:                                   # noqa: BLE001 - a missing chart must not break the page
+        return hit[1] if hit else None
+    _CHARTS[(t, rng)] = (time.time(), rows)
+    return rows
+
+
+def chart(q=None) -> dict:
+    q = q or {}
+    t = (_clean_tickers(q.get("t", ""), 1) or [""])[0]
+    rng = q.get("range", "6mo")
+    if not t or rng not in RANGES:
+        return {"error": "bad ticker or range"}
+    con = db()
+    out = {"ticker": t, "range": rng, "interval": RANGES[rng], "candles": _candles(t, rng) or []}
+    if q.get("cmp") == "1":
+        out["spy"] = _candles("SPY", rng) or []
+    start = (out["candles"][0][0] / 1000) if out["candles"] else 0
+    from datetime import datetime as _dt
+    since = _dt.utcfromtimestamp(start).strftime("%Y-%m-%d") if start else "1970-01-01"
+    out["recommendations"] = rows(con,
+        "select recommendation_date at, decision, confidence, entry_price, price_target, stop_loss, outcome, exit_date, exit_price "
+        "from recommendations where ticker=? and recommendation_date>=? order by recommendation_date", t, since)
+    out["decisions"] = rows(con,
+        "select decided_at at, raw_decision decision, raw_confidence confidence, price from llm_decisions "
+        "where ticker=? and decided_at>=? order by decided_at", t, since)
+    m = _meta(t)
+    out["last"] = m["price"] if m else None
+    return out
+
+
+def heatmap(q=None) -> dict:
+    snap_f, sec_f = CACHE / "market_snapshot.json", HERE / "sectors.json"
+    if not snap_f.exists():
+        return {"stocks": [], "sectors": [], "note": "No snapshot yet: it is written every 30 minutes while the market is open."}
+    snap, sectors = json.loads(snap_f.read_text()), (json.loads(sec_f.read_text()) if sec_f.exists() else {})
+    con = db()
+    latest = con.execute("select scan_id from llm_decisions order by decided_at desc limit 1").fetchone()
+    called = ({r[0]: r[1] for r in con.execute("select ticker, raw_decision from llm_decisions where scan_id=?", (latest[0],))} if latest else {})
+    stocks = [{"t": t, "sector": sectors.get(t, "Other"), "p": v["p"], "c": v["c"], "c5": v["c5"], "rsi": v["rsi"], "dv": v["dv"],
+               "analysed": t in called, "call": called.get(t)} for t, v in snap["stocks"].items()]
+    agg = {}
+    for x in stocks:
+        a = agg.setdefault(x["sector"], {"name": x["sector"], "n": 0, "c": 0.0, "c5": 0.0})
+        a["n"] += 1
+        a["c"] += x["c"]
+        a["c5"] += x["c5"]
+    secs = sorted(({"name": a["name"], "n": a["n"], "c": a["c"] / a["n"], "c5": a["c5"] / a["n"]} for a in agg.values()), key=lambda a: -a["c"])
+    age = (datetime.now(timezone.utc) - datetime.fromisoformat(snap["asof"])).total_seconds() / 60
+    return {"asof": snap["asof"], "age_min": round(age), "n": snap["n"], "stocks": stocks, "sectors": secs}
+
+
 MODEL_PRICES = {"gpt-4o-mini": (0.15, 0.60)}       # USD per 1M tokens (in, out): production model
 ET = ZoneInfo("America/New_York")
 
@@ -321,9 +430,12 @@ def public(q=None) -> dict:
 
 ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": history, "/api/paper": paper,
           "/api/context": context, "/api/scans": scans, "/api/tickers": tickers, "/api/ticker": ticker,
-          "/api/arena": arena, "/api/scoreboard": scoreboard}
+          "/api/arena": arena, "/api/scoreboard": scoreboard,
+          "/api/pulse": pulse, "/api/quotes": quotes, "/api/chart": chart, "/api/heatmap": heatmap}
 PUBLIC_ROUTES = {"/api/public": public}
-PUBLIC_FILES = {"/public": ("public.html", "text/html; charset=utf-8"), "/charts.js": ("charts.js", "application/javascript"),
+PUBLIC_FILES = {"/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
+                "/apple-touch-icon.png": ("icon-180.png", "image/png"), "/icon-192.png": ("icon-192.png", "image/png"), "/icon-512.png": ("icon-512.png", "image/png"),
+                "/public": ("public.html", "text/html; charset=utf-8"), "/charts.js": ("charts.js", "application/javascript"), "/live.js": ("live.js", "application/javascript"),
                 "/public/verify_chain.py": ("verify_chain.py", "text/x-python; charset=utf-8")}
 PUBLIC_CACHE_FILES = {"/public/chain.json": ("track_record_chain.json", "application/json"), "/public/revealed.csv": ("public_revealed.csv", "text/csv; charset=utf-8")}
 
@@ -361,6 +473,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/auth/logout":
             return self._json(200, {"ok": True}, [("Set-Cookie", auth.cookie_header("", 0))])
+        if path == "/auth/google":
+            return self._google_redirect_login()
         if path != "/auth/login":
             return self._send(404, b"not found", "text/plain")
         try:
@@ -382,6 +496,31 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(500, {"error": "server not configured"})
         print(f"auth: signed in {email}", flush=True)
         self._json(200, {"ok": True}, [("Set-Cookie", auth.cookie_header(token))])
+
+    def _google_redirect_login(self):
+        """Sign-in for the iOS Home Screen app (popups are unreliable there): Google POSTs a form with the ID token.
+        Google's own CSRF protection applies: the g_csrf_token cookie must equal the g_csrf_token form field."""
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+            if not 0 < n <= 16384:
+                return self._send(400, b"bad request", "text/plain")
+            form = {k: v[0] for k, v in parse_qs(self.rfile.read(n).decode()).items()}
+        except Exception:                          # noqa: BLE001
+            return self._send(400, b"bad request", "text/plain")
+        cookies = dict(p.strip().partition("=")[::2] for p in self.headers.get("Cookie", "").split(";") if "=" in p)
+        csrf = form.get("g_csrf_token", "")
+        if not csrf or csrf != cookies.get("g_csrf_token"):
+            return self._send(400, b"bad request", "text/plain")
+        email = auth.verify_google(form.get("credential", ""))
+        if not email or email not in auth.allowed_emails():
+            print("auth: refused redirect sign-in", flush=True)
+            return self._send(303, b"", "text/plain", [("Location", "/?denied=1")])
+        try:
+            token = auth.sign_session(email)
+        except RuntimeError:
+            return self._send(500, b"server not configured", "text/plain")
+        print(f"auth: signed in {email} (redirect)", flush=True)
+        self._send(303, b"", "text/plain", [("Location", "/"), ("Set-Cookie", auth.cookie_header(token))])
 
     def do_GET(self):
         u = urlparse(self.path)

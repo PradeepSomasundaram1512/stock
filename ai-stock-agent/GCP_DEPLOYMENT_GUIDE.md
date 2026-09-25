@@ -424,3 +424,17 @@ $0.000002 per GiB-second (us-central1). The stop-loss check was the biggest line
 of every 5, cutting that part by two thirds. A budget alert ("Stock scanner monthly", $25, alerts at 50/90/100%) emails the billing
 account admins; it warns but does not stop spending. List it with
 `gcloud billing budgets list --billing-account=<id>`. The shadow model has its own daily cap (`SHADOW_DAILY_BUDGET_USD`, default $0.25).
+
+## Live dashboard, heatmap and phone use
+
+- **Live bar:** `/api/pulse` (polled every 30 s while the page is visible) drives the market-session clock, countdown to the next scheduled run
+  (`dashboard/market_clock.py`, which mirrors `05_schedule_jobs.sh`; its 2026 NYSE holiday list must be updated each year), the age of the last
+  scan, SPY/VIX, and position prices. A newly landed scan triggers a toast and refreshes the data.
+- **Heatmap:** `stock-scanner-market-snapshot` (every 30 min, 09:00-16:59 ET weekdays, light job) runs `market_snapshot.py`: one batched download of
+  the whole scan universe into `data/market_snapshot.json`; sectors come from `dashboard/sectors.json` (`python dashboard/build_sectors.py`).
+  Tile size is dollar volume (market cap is not available from the source), colour is 1-day/5-day change or RSI.
+- **Charts:** `/api/chart` returns candles (Yahoo, ~15 min delayed) plus the model's own recommendations and decisions for that ticker; the chart is
+  hand-written SVG (`dashboard/charts.js`), so no third-party charting licence applies.
+- **iPhone:** open the site in Safari, sign in, then Share > Add to Home Screen. The Home Screen app has separate cookie storage on iOS, so it
+  signs in again, and uses a redirect-style Google sign-in: add `<service URL>/auth/google` under *Authorized redirect URIs* of the OAuth client
+  (Google Auth Platform > Clients). Browsing in Safari works without that. Regenerate icons with `python dashboard/make_icons.py`.

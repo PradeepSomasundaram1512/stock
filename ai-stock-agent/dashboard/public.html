@@ -2,15 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scanner">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Public Track Record</title>
 <meta name="description" content="An AI stock scanner audited in public: forward results against simple baselines, and a tamper-evident log.">
 <style>
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6675;--line:#e3e6ec;--ok:#1a8f4d;--warn:#d98200;--bad:#c62828;--acc:#2f5fd0}
 @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8ebf0;--mute:#98a2b3;--line:#262c36;--ok:#3ecf7c;--warn:#f0a531;--bad:#ff6b6b;--acc:#7aa2ff}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+html{-webkit-text-size-adjust:100%}body{margin:0;-webkit-tap-highlight-color:transparent;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom))}
 h1{font-size:26px;line-height:1.2;margin:8px 0 6px;letter-spacing:-.01em}
 h2{font-size:18px;margin:0 0 8px}
 p{margin:8px 0}.mute{color:var(--mute)}.small{font-size:12.5px}
