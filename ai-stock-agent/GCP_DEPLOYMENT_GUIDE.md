@@ -366,7 +366,7 @@ then refused; there is no public access. Manage the list with
 Then send the tester the service URL (`gcloud run services describe stock-dashboard --region=us-central1
 --format="value(status.url)"`). Setup notes: IAP needs the `iap` and `cloudresourcemanager` APIs, the annotation
 `run.googleapis.com/iap-enabled: 'true'` on the service, and `roles/run.invoker` for
-`service-<project number>@gcp-sa-iap.iam.gserviceaccount.com`. The local proxy
-(`gcloud run services proxy ...`) still works for the project owner.
+`service-<project number>@gcp-sa-iap.iam.gserviceaccount.com`. `gcloud run services proxy`
+no longer works: IAP redirects it to sign-in, so open the service URL in a browser instead.
 
 Local development: `DATA_DIR=/path/to/copies python dashboard/server.py`.
