@@ -449,3 +449,35 @@ leavers drop out, joiners are appended, and every change is logged to `data/univ
 The scanner and `market_snapshot.py` use the refreshed list when it is valid and less than 45 days old, otherwise the list built into
 `ultimate_market_scanner.py`. To scan names beyond the index, list them in `audit/scan_extras.txt` (one per line). Because the universe change alters where
 forward-test signals come from, it is recorded in `paper_results/forward_test_deviations.md`. Tests: `python tests/test_scan_universe.py`.
+
+## Backups and restoring a file
+
+The data and dashboard-config buckets have **object versioning** on (old versions expire after 30 days; the frequently rewritten lock file's
+after 1 day), on top of Google's default 7-day soft delete. To recover from a bad write or an accidental delete:
+
+    gcloud storage ls -a gs://<project>-stock-scanner-data/backtest.db          # lists generations: ...backtest.db#1790371076961913
+    gcloud storage cp "gs://<project>-stock-scanner-data/backtest.db#<generation>" gs://<project>-stock-scanner-data/backtest.db
+
+(The restore was drilled on a throwaway object: overwrite, list, copy the old generation back, verified.) Do this while no job is running, or
+the next upload will overwrite the restored file.
+
+## Automated checks
+
+- **CI** (`.github/workflows/tests.yml`) runs on every push: Python/shell/JavaScript syntax, and the dashboard (sign-in, endpoints), market-clock,
+  track-record, scan-universe and digest-check test suites.
+- **Daily digest** (Discord, 16:20 ET) now also verifies the machinery: scan-list size and age, heatmap snapshot age and missing tickers, and
+  the age of the latest scan; any problem turns the message to a warning.
+- **Sign-in** is rate limited (10 attempts per address per 5 minutes), and responses carry HSTS and a permissions policy. A strict
+  Content-Security-Policy was deliberately not added: it could not be tested against real Google sign-in and could lock everyone out.
+
+## "How similar past calls did"
+
+`/api/similar` (shown under each ticker's latest call) reports, from the logged history of closed calls, the win rate of past calls with the same
+decision in a similar setup (RSI within 8, same trend), at about the same confidence, and overall, each with a 95% Wilson interval, and it says
+"too few" below 20 examples. It describes the past; it is not a forecast.
+
+## Reproducing the paper's numbers
+
+`paper_results/daily_panel_*.pkl.gz` is the frozen raw price download used by `paper_analysis.py`, `paper_baselines.py` and
+`forward_test.py walkforward` (`audit_core.load_panel(..., cache_dir=...)`). Yahoo revises adjusted prices slightly between downloads, which
+used to make the portfolio-rule row wobble between runs; with the frozen file two runs are byte-identical. The live forward test never uses a cache.
