@@ -98,3 +98,38 @@ def holm(pvals: dict) -> dict:
         run = max(run, min(1.0, (m - k) * pvals[name]))
         adj[name] = run
     return adj
+
+
+def null_days(P, per_date: dict, universe, pool: int = 50) -> list:
+    """Per date with real BUYs: standardised (RSI, momentum, ATR%) features and CARs of every valid universe stock, the `pool` lowest-RSI names
+    (mimicking the pre-screen), and how many picks the real system made. Input to null_bias()."""
+    days = []
+    for i, n in per_date.items():
+        ok = [u for u in universe if valid(P, i, u)]
+        X = pd.DataFrame({"rsi": P["rsi"].iloc[i][ok], "mom": P["mom"].iloc[i][ok], "atr": P["atr_pct"].iloc[i][ok]}).dropna()
+        z = ((X - X.mean()) / X.std()).to_numpy()
+        car = np.array([car_path(P, i, u)[0][H] for u in X.index])
+        days.append({"i": int(i), "n": int(n), "z": z, "car": car, "pool": np.argsort(X["rsi"].to_numpy())[:pool]})
+    return days
+
+
+def null_bias(days: list, K: int = 10, n_sets: int = 200, seed: int = 0):
+    """Bias of the matched placebo for extreme picks: the mean alpha (CAR minus the mean CAR of the K nearest non-selected stocks) that a picker with NO
+    skill earns, averaged over `n_sets` seeded fake pickers that choose at random from the oversold pool on each date. Returns (bias, sd of a fake picker's mean)."""
+    rng = np.random.default_rng(seed)
+    means = []
+    for _ in range(n_sets):
+        alpha = []
+        for d in days:
+            if len(d["car"]) <= K + 1:
+                continue
+            picks = rng.choice(d["pool"], size=min(d["n"], len(d["pool"])), replace=False)
+            excl = np.zeros(len(d["car"]), bool)
+            excl[picks] = True
+            for p in picks:
+                dist = ((d["z"] - d["z"][p]) ** 2).sum(1)
+                dist[excl] = np.inf                                   # the day's picks are never placebo names
+                nn = np.argpartition(dist, K)[:K]
+                alpha.append(d["car"][p] - d["car"][nn].mean())
+        means.append(np.mean(alpha) if alpha else 0.0)
+    return float(np.mean(means)), float(np.std(means, ddof=1))

@@ -492,3 +492,12 @@ used to make the portfolio-rule row wobble between runs; with the frozen file tw
   time; on 2026-09-25 it resolved to `gpt-4o-mini-2024-07-18`). The column is added automatically by `migrate_schema()`.
 - `ablation.py` also replays the two key ablations with different replacement wording, so an effect can be told apart from an artifact of the words.
 - `paper_results/osf_preregistration.md` is ready to paste into an external registry (OSF / AsPredicted) for an independent timestamp.
+
+## Forward test: H6 and paper status
+
+- `forward_test.py` now includes **H6, the primary test of ten-day selection skill** (pre-registered in addendum 3 before it was implemented): the alpha over
+  the matched placebo minus the placebo's bias, the bias measured each run by 200 seeded no-skill fake pickers on the same dates (`audit_core.null_bias`,
+  numpy only, so it runs in the cloud image). The Holm family is H1 to H6.
+- `paper_power_intraday.py` validates the intraday result the same way as the ten-day one (size, power, placebo bias, six placebo designs).
+- `python paper_forward_status.py` pulls the latest `forward_test.json` from the bucket and writes `paper/results_forward_status.tex`: until the
+  pre-registered minimum sample is met the paper says how far along it is; afterwards it adds a results table (H1 to H6 with Holm p). Then rebuild the paper.

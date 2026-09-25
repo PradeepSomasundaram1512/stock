@@ -25,12 +25,13 @@ TAU = 0.85                  # H1 confidence gate
 MIN_SIGNALS, MIN_BLOCKS = 300, 20
 N_BOOT = 3000
 K_MATCH = 10                # placebo neighbours per signal (same as the paper)
+N_NULL_SETS, NULL_SEED = 200, 2033   # H6: seeded no-skill fake pickers used to measure the placebo's bias
 SPLIT = 0.60                # walk-forward: share of BUY dates in the early window
 rng = np.random.default_rng(2028)
 
 
-def build(db: str, end: pd.Timestamp, cache_dir=None) -> pd.DataFrame:
-    """One row per matured BUY signal with its CAR and the per-date rule/universe CARs."""
+def build(db: str, end: pd.Timestamp, cache_dir=None):
+    """(signals, null_days): one row per matured BUY signal with its CAR and the per-date rule/universe CARs, and the per-date data for the no-skill pickers."""
     sig, _, _ = pa.load_signals(db)
     fixed = pa.fixed_universe()
     P = pa.load_panel(sorted(set(sig.ticker.unique()) | set(fixed)), sig.day.min() - pd.Timedelta(days=140), end, cache_dir=cache_dir)
@@ -57,7 +58,10 @@ def build(db: str, end: pd.Timestamp, cache_dir=None) -> pd.DataFrame:
             match = float(np.mean([pa.car_path(P, i, u)[0][pa.H] for u in nb])) if nb else float("nan")
             rows.append({"i": i, "day": str(dates[i].date()), "ticker": r.ticker, "conf": r.confidence,
                          "rsi": P["rsi"][r.ticker].iloc[i], "car": pa.car_path(P, i, r.ticker)[0][pa.H], "match": match, "rev": revc, "uni": uni})
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # null data for H6: on each date with matured BUYs, the pool of oversold stocks a no-skill picker would draw from
+    per_date = df.groupby("i").size().to_dict()
+    return df, pa.null_days(P, per_date, universe)
 
 
 def boot(df: pd.DataFrame, stat):
@@ -73,7 +77,7 @@ def boot(df: pd.DataFrame, stat):
             "se": float(se), "mde": float(2.8 * se), "p": float(p), "detectable": bool(np.percentile(draws, 2.5) > 0 or np.percentile(draws, 97.5) < 0)}
 
 
-def analyse(df: pd.DataFrame, label: str) -> dict:
+def analyse(df: pd.DataFrame, label: str, days: list = None) -> dict:
     n, nb = len(df), df["i"].floordiv(pa.BLOCK).nunique()
     out = {"window": label, "n_signals": n, "n_blocks": int(nb),
            "first": df.day.min() if n else None, "last": df.day.max() if n else None}
@@ -95,7 +99,17 @@ def analyse(df: pd.DataFrame, label: str) -> dict:
         ok = a.notna()
         return a[ok & (d.rsi <= d.rsi.quantile(0.30))].mean() - a[ok].mean()
     out["H5_lowrsi30_minus_all"] = boot(df, h5)
-    fam = {k: out[k]["p"] for k in ("H1_gated_minus_all", "H2_spearman_conf_car", "H3_reversal_minus_universe", "H4_llm_minus_reversal", "H5_lowrsi30_minus_all")}
+    # H6 (addendum 3): selection alpha over the placebo MINUS the placebo's bias, measured with seeded no-skill fake pickers on the same dates
+    if days:
+        have = set(df.i.unique())
+        b, b_sd = pa.null_bias([d for d in days if d["i"] in have], K=K_MATCH, n_sets=N_NULL_SETS, seed=NULL_SEED)
+        out["placebo_bias"], out["placebo_bias_sd"] = b, b_sd
+
+        def h6(d):
+            a = d["car"] - d["match"]
+            return a[a.notna()].mean() - b
+        out["H6_biascorrected_alpha"] = boot(df, h6)
+    fam = {k: out[k]["p"] for k in ("H1_gated_minus_all", "H2_spearman_conf_car", "H3_reversal_minus_universe", "H4_llm_minus_reversal", "H5_lowrsi30_minus_all", "H6_biascorrected_alpha") if k in out}
     out["holm_adjusted_p"] = pa.holm(fam)                    # across the five pre-registered hypotheses
     return out
 
@@ -106,7 +120,8 @@ def show(o: dict):
         print("  ", o["verdict"])
     for k, lab, pc in (("H1_gated_minus_all", "H1 conf>=0.85 minus all BUY (CAR)", 1), ("H2_spearman_conf_car", "H2 Spearman(conf, CAR)", 0),
                        ("H3_reversal_minus_universe", "H3 reversal rule minus universe (CAR)", 1), ("H4_llm_minus_reversal", "H4 LLM minus reversal rule (CAR)", 1),
-                       ("H5_lowrsi30_minus_all", "H5 lowest-RSI third minus all BUYs (alpha vs placebo)", 1)):
+                       ("H5_lowrsi30_minus_all", "H5 lowest-RSI third minus all BUYs (alpha vs placebo)", 1),
+                       ("H6_biascorrected_alpha", "H6 bias-corrected selection alpha (PRIMARY)", 1)):
         if k in o:
             r, f = o[k], (lambda v: f"{v*100:+.2f}%") if pc else (lambda v: f"{v:+.3f}")
             print(f"   {lab:42} {f(r['est'])} [{f(r['lo'])}, {f(r['hi'])}]  MDE {f(r['mde']).lstrip('+')}  {'DETECTABLE' if r['detectable'] else 'not detectable'}")
@@ -118,7 +133,8 @@ def write_paper_tex(res: list):
     pc = lambda r: f"${r['est'] * 100:+.2f}\\;[{r['lo'] * 100:+.2f},{r['hi'] * 100:+.2f}]$"
     rho = lambda r: f"${r['est']:+.3f}\\;[{r['lo']:+.3f},{r['hi']:+.3f}]$"
     spec = [("H1_gated_minus_all", "H1: conf.\\ $\\geq 0.85$ vs.\\ all", pc), ("H2_spearman_conf_car", "H2: rank corr.\\ conf.--CAR", rho),
-            ("H3_reversal_minus_universe", "H3: low-RSI vs.\\ universe", pc), ("H4_llm_minus_reversal", "H4: LLM vs.\\ low-RSI", pc), ("H5_lowrsi30_minus_all", "H5: lowest-RSI third vs.\\ all (placebo alpha)", pc)]
+            ("H3_reversal_minus_universe", "H3: low-RSI vs.\\ universe", pc), ("H4_llm_minus_reversal", "H4: LLM vs.\\ low-RSI", pc), ("H5_lowrsi30_minus_all", "H5: lowest-RSI third vs.\\ all (placebo alpha)", pc),
+            ("H6_biascorrected_alpha", "H6: bias-corrected alpha (primary)", pc)]
     rows = [f"{lab} & {fmt(early[k])} & {fmt(late[k])} \\\\" for k, lab, fmt in spec]
     tex = ("% generated by forward_test.py walkforward; do not edit\n"
            f"\\newcommand{{\\fwdEarlyN}}{{{early['n_signals']:,}}}\n\\newcommand{{\\fwdLateN}}{{{late['n_signals']:,}}}\n"
@@ -141,7 +157,7 @@ def discord_status(res: list):
     lines.append(o.get("verdict") or "Minimum sample reached: results below are reportable.")
     for k, lab in (("H1_gated_minus_all", "H1 confidence gate"), ("H2_spearman_conf_car", "H2 confidence rank"),
                    ("H3_reversal_minus_universe", "H3 reversal rule"), ("H4_llm_minus_reversal", "H4 LLM vs reversal"),
-                   ("H5_lowrsi30_minus_all", "H5 lowest-RSI third")):
+                   ("H5_lowrsi30_minus_all", "H5 lowest-RSI third"), ("H6_biascorrected_alpha", "H6 bias-corrected alpha")):
         if k in o:
             r = o[k]
             lines.append(f"{lab}: {r['est']:+.4f} [{r['lo']:+.4f}, {r['hi']:+.4f}] " + ("**detectable**" if r["detectable"] else "not detectable"))
@@ -161,14 +177,14 @@ def main():
     mode = argv[0] if argv else "walkforward"
     if mode == "walkforward":
         db = argv[1] if len(argv) > 1 else str(DEV_DB)
-        df = build(db, pa.DATA_END, cache_dir=Path(__file__).parent / "paper_results")   # frozen prices: the development sample never changes
+        df, days = build(db, pa.DATA_END, cache_dir=Path(__file__).parent / "paper_results")   # frozen prices: the development sample never changes
         cut = sorted(df.i.unique())[int(SPLIT * df.i.nunique())]
-        res = [analyse(df[df.i < cut], "early (first 60% of dates)"), analyse(df[df.i >= cut], "late (last 40% of dates)"), analyse(df, "all development data")]
+        res = [analyse(df[df.i < cut], "early (first 60% of dates)", days), analyse(df[df.i >= cut], "late (last 40% of dates)", days), analyse(df, "all development data", days)]
     elif mode == "forward":
         db = argv[1]
-        df = build(db, pd.Timestamp.today().normalize() + pd.Timedelta(days=1))
+        df, days = build(db, pd.Timestamp.today().normalize() + pd.Timedelta(days=1))
         df = df[pd.to_datetime(df.day) >= FREEZE]
-        res = [analyse(df, "forward (on/after 2026-09-25, matured only)")] if len(df) else [
+        res = [analyse(df, "forward (on/after 2026-09-25, matured only)", days)] if len(df) else [
             {"window": "forward", "n_signals": 0, "n_blocks": 0, "verdict": f"insufficient data (0 signals, 0 blocks; need {MIN_SIGNALS} and {MIN_BLOCKS})"}]
     else:
         sys.exit(__doc__)
