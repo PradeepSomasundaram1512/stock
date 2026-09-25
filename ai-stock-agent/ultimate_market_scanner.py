@@ -1267,6 +1267,11 @@ def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = No
         logger.info(f"Logged {n_logged} candidate decisions ({n_fb} exception fallbacks)")
     except Exception as e:  # logging must never break a scan
         logger.warning(f"Could not log candidate decisions: {e}")
+    try:    # the exact inputs of every call, so calls can be replayed with parts removed (ablation.py)
+        import input_log
+        input_log.append(scan_id, results)
+    except Exception as e:  # noqa: BLE001 - never break a scan
+        logger.warning(f"Could not log call inputs: {e}")
     global _LAST_SCAN
     _LAST_SCAN = {"scan_id": scan_id, "results": results}
 

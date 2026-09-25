@@ -1,0 +1,82 @@
+{
+ "n_candidates": 38,
+ "note": "agreement = share of candidates whose decision equals control_1's; the noise floor is the same quantity for two more identical control runs",
+ "variants": {
+  "control_2": {
+   "agree": 0.9473684210526315,
+   "lo": 0.868421052631579,
+   "hi": 1.0,
+   "buy_rate": 0.15789473684210525,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": 0.003947368421052633,
+   "flips_to_buy": 1,
+   "flips_from_buy": 0
+  },
+  "control_3": {
+   "agree": 0.9210526315789473,
+   "lo": 0.8157894736842105,
+   "hi": 1.0,
+   "buy_rate": 0.13157894736842105,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": -0.0013157894736842072,
+   "flips_to_buy": 1,
+   "flips_from_buy": 1
+  },
+  "no_news": {
+   "agree": 0.868421052631579,
+   "lo": 0.7631578947368421,
+   "hi": 0.9736842105263158,
+   "buy_rate": 0.02631578947368421,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": -0.024999999999999994,
+   "flips_to_buy": 0,
+   "flips_from_buy": 4,
+   "beyond_noise": false
+  },
+  "no_fundamentals": {
+   "agree": 0.868421052631579,
+   "lo": 0.7631578947368421,
+   "hi": 0.9736842105263158,
+   "buy_rate": 0.23684210526315788,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": 0.01184210526315789,
+   "flips_to_buy": 4,
+   "flips_from_buy": 0,
+   "beyond_noise": false
+  },
+  "no_market": {
+   "agree": 0.868421052631579,
+   "lo": 0.7631578947368421,
+   "hi": 0.9736842105263158,
+   "buy_rate": 0.18421052631578946,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": -0.0013157894736842205,
+   "flips_to_buy": 3,
+   "flips_from_buy": 1,
+   "beyond_noise": false
+  },
+  "no_technical": {
+   "agree": 0.7368421052631579,
+   "lo": 0.6052631578947368,
+   "hi": 0.868421052631579,
+   "buy_rate": 0.3684210526315789,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": 0.04210526315789473,
+   "flips_to_buy": 9,
+   "flips_from_buy": 0,
+   "beyond_noise": true
+  },
+  "technical_only": {
+   "agree": 0.8421052631578947,
+   "lo": 0.7105263157894737,
+   "hi": 0.9473684210526315,
+   "buy_rate": 0.05263157894736842,
+   "buy_rate_control": 0.13157894736842105,
+   "mean_conf_shift": -0.05263157894736843,
+   "flips_to_buy": 1,
+   "flips_from_buy": 4,
+   "beyond_noise": false
+  }
+ },
+ "noise_floor_agree": 0.9342105263157894
+}

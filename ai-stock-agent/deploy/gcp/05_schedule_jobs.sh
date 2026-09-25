@@ -66,6 +66,8 @@ create_or_update "stock-scanner-forward-test"    "0 9 * * 6"     '["--forward-te
 create_or_update "stock-scanner-market-snapshot" "*/30 9-16 * * 1-5" '["--market-snapshot"]' "$LIGHT_JOB_NAME"
 # Keeps the scan list equal to the S&P 500 (Sunday morning, before the week's scans); aborts on any doubt and keeps the old list.
 create_or_update "stock-scanner-refresh-universe" "0 8 * * 0" '["--refresh-universe"]' "$LIGHT_JOB_NAME"
+# Weekly input ablation: replays a 15% sample of logged inputs with parts removed (capped at $1.50 and 20 minutes; main job for the LLM dependencies).
+create_or_update "stock-scanner-ablation" "30 10 * * 6" '["--ablation"]'
 create_or_update "stock-scanner-swing-trade"      "5 10 * * 1-5"  '["--swing-trade"]'
 
 echo ""
