@@ -123,6 +123,23 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(call(self.base, "/auth/login", method="POST", body=b"{not json")[0], 400)
         self.assertEqual(call(self.base, "/auth/login", method="POST", body=b"x" * 9000)[0], 400)
 
+    def test_public_routes_need_no_session_and_expose_no_signals(self):
+        for path in ("/public", "/api/public", "/charts.js"):
+            self.assertEqual(call(self.base, path)[0], 200, path)
+        code, body, _ = call(self.base, "/api/public")
+        d = json.loads(body)
+        self.assertEqual(set(d), {"audit", "forward", "forward_needs", "chain", "revealed_rows"})
+        self.assertNotIn('"ticker"', body)                       # aggregates only: no per-stock rows
+        self.assertNotIn("email", body)
+        self.assertIn("Not investment advice", call(self.base, "/public")[1])
+
+    def test_public_allowlist_is_exact(self):
+        # near-misses of public paths must not become public
+        for path in ("/public/../api/summary", "/api/public/x", "/publicx", "/api/scoreboard", "/api/arena", "/api/ticker?t=AAPL"):
+            self.assertNotEqual(call(self.base, path)[0], 200, path)
+        self.assertEqual(call(self.base, "/api/summary")[0], 401)
+        self.assertEqual(call(self.base, "/api/latest")[0], 401)
+
     def test_dev_bypass_is_off(self):
         self.assertFalse(server.DEV_NO_AUTH)
 

@@ -67,10 +67,29 @@ def render(s: dict) -> tuple[str, str]:
     return "\n".join(lines), status
 
 
+def chain_update() -> tuple:
+    """Commit completed days to the public tamper-evident chain (track_record.py); (line, problem?)."""
+    try:
+        import track_record as tr
+        d = DB.parent
+        r = tr.update(DB, d / "track_record_chain.json", d / "public_revealed.csv")
+        if not r["days"]:
+            return "Track record: the first day is committed once it is complete (tomorrow)", False
+        return (f"Track record: {r['days']} days committed, chain head `{r['head'][:16]}`"
+                + (f" (+{r['new_days']} new)" if r["new_days"] else "")), False
+    except Exception as e:      # noqa: BLE001 - reported loudly, but must not fail the digest
+        return f"⚠️ Track-record chain problem: {type(e).__name__}: {e}", True
+
+
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     day = args[0] if args else datetime.utcnow().strftime("%Y-%m-%d")
     text, status = render(summarize(day))
+    if "--print" not in sys.argv:
+        line, problem = chain_update()
+        text += "\n" + line
+        if problem:
+            status = "warn"
     if "--print" in sys.argv:
         print(text)
         return 0

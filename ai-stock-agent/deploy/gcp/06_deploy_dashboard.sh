@@ -5,7 +5,7 @@
 # Runs as its own service account: read-only on the data bucket and on the invite list.
 #
 # Access control, two modes:
-#   * GOOGLE_CLIENT_ID unset (default): the service is NOT public. Cloud Run IAP guards it, but IAP's
+#   * No GOOGLE_CLIENT_ID given and none already configured: the service is NOT public. Cloud Run IAP guards it, but IAP's
 #     built-in sign-in only admits accounts inside the Google Cloud organization, so personal Gmail
 #     accounts are refused. Safe, but unusable for invited testers.
 #   * GOOGLE_CLIENT_ID set: the service is public and the app itself enforces invite-only Google
@@ -23,6 +23,17 @@ DASH_SA="${DASH_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 DASH_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE}"
 CONFIG_BUCKET="${PROJECT_ID}-stock-dashboard-config"
 CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+# A redeploy must not silently undo sign-in: with no ID given, keep the one already configured.
+if [ -z "$CLIENT_ID" ]; then
+    CLIENT_ID=$(gcloud run services describe "$SERVICE" --region="$REGION" --format=json 2>/dev/null | python3 -c "
+import json,sys
+try:
+    env = json.load(sys.stdin)['spec']['template']['spec']['containers'][0].get('env', [])
+    print(next((e.get('value','') for e in env if e['name']=='GOOGLE_CLIENT_ID'), ''))
+except Exception:
+    print('')")
+    [ -n "$CLIENT_ID" ] && echo "Keeping the existing GOOGLE_CLIENT_ID (${CLIENT_ID%%-*}-…)"
+fi
 
 gcloud iam service-accounts describe "$DASH_SA" >/dev/null 2>&1 || \
     gcloud iam service-accounts create "$DASH_SA_NAME" --display-name="Stock dashboard (read-only)"

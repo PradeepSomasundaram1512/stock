@@ -11,7 +11,8 @@
 #
 # --swing-trade runs swing_trader.py's live paper-trading cycle instead of
 # the default ultimate_market_scanner.py; --digest posts the end-of-day health
-# digest (daily_digest.py); every other arg (or none) goes to
+# digest (daily_digest.py); --forward-test runs the pre-registered forward test
+# (forward_test.py) and posts its status; every other arg (or none) goes to
 # ultimate_market_scanner.py as before.
 #
 set -uo pipefail
@@ -39,6 +40,9 @@ LOGF=$(mktemp)
 if [ "${1:-}" = "--swing-trade" ]; then
     shift
     python -u swing_trader.py "$@" 2>&1 | tee "$LOGF"
+    STATUS=${PIPESTATUS[0]}
+elif [ "${1:-}" = "--forward-test" ]; then
+    python -u forward_test.py forward data/backtest.db --out data/forward_test.json --discord 2>&1 | tee "$LOGF"
     STATUS=${PIPESTATUS[0]}
 elif [ "${1:-}" = "--digest" ]; then
     shift

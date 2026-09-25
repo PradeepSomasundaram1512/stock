@@ -12,6 +12,9 @@ endpoints computed from the same files the scheduled jobs write to the GCS bucke
     /api/arena     production vs. shadow model: agreement, disagreements, moves since
     /api/scoreboard  forward-audit results (static, from scoreboard.json) + live outcomes
 
+PUBLIC (no sign-in; an explicit allowlist, aggregate/delayed data only, never the live decision database):
+    /public  /api/public  /public/chain.json  /public/revealed.csv  /public/verify_chain.py  /charts.js
+
 It only ever READS (its service account has objectViewer on the bucket), so it cannot
 corrupt trading state. Files are re-downloaded at most every CACHE_TTL seconds.
 Access is invite-only Google sign-in implemented in auth.py (the service itself is publicly
@@ -39,7 +42,8 @@ sys.path.insert(0, str(HERE))
 import auth
 CACHE = Path(os.environ.get("DATA_DIR") or "/tmp/dashboard-data")
 CACHE_TTL = int(os.environ.get("CACHE_TTL", "120"))
-FILES = ("backtest.db", "paper_trades.json", "swing_trades.json")
+FILES = ("backtest.db", "paper_trades.json", "swing_trades.json", "forward_test.json",
+         "track_record_chain.json", "public_revealed.csv")
 _lock = threading.Lock()
 _fetched = 0.0
 
@@ -286,6 +290,9 @@ def arena(q=None) -> dict:
 def scoreboard(q=None) -> dict:
     f = HERE / "scoreboard.json"
     out = {"audit": json.loads(f.read_text()) if f.exists() else None}
+    ft = CACHE / "forward_test.json"           # written weekly by the forward-test job
+    out["forward"] = (json.loads(ft.read_text()) or [None])[0] if ft.exists() else None
+    out["forward_needs"] = {"signals": 300, "blocks": 20}
     con = db()
     live = rows(con,
         "select outcome, count(*) n, avg(profit_loss_pct) avg_pl from recommendations "
@@ -296,9 +303,29 @@ def scoreboard(q=None) -> dict:
     return out
 
 
+def public(q=None) -> dict:
+    """Everything the world-readable page shows: audited aggregates, forward-test progress, chain status.
+    Deliberately reads NO row from the live decision tables, so it can never leak a current signal."""
+    out = {"audit": json.loads((HERE / "scoreboard.json").read_text()) if (HERE / "scoreboard.json").exists() else None}
+    ft = CACHE / "forward_test.json"
+    out["forward"] = (json.loads(ft.read_text()) or [None])[0] if ft.exists() else None
+    out["forward_needs"] = {"signals": 300, "blocks": 20}
+    ch = CACHE / "track_record_chain.json"
+    chain = json.loads(ch.read_text()) if ch.exists() else []
+    out["chain"] = {"days": len(chain), "first": chain[0]["day"] if chain else None, "last": chain[-1]["day"] if chain else None,
+                    "head": chain[-1]["hash"] if chain else None, "rows": sum(e["n"] for e in chain)}
+    rv = CACHE / "public_revealed.csv"
+    out["revealed_rows"] = max(0, rv.read_text().count("\n") - 1) if rv.exists() else 0
+    return out
+
+
 ROUTES = {"/api/summary": summary, "/api/latest": latest, "/api/history": history, "/api/paper": paper,
           "/api/context": context, "/api/scans": scans, "/api/tickers": tickers, "/api/ticker": ticker,
           "/api/arena": arena, "/api/scoreboard": scoreboard}
+PUBLIC_ROUTES = {"/api/public": public}
+PUBLIC_FILES = {"/public": ("public.html", "text/html; charset=utf-8"), "/charts.js": ("charts.js", "application/javascript"),
+                "/public/verify_chain.py": ("verify_chain.py", "text/x-python; charset=utf-8")}
+PUBLIC_CACHE_FILES = {"/public/chain.json": ("track_record_chain.json", "application/json"), "/public/revealed.csv": ("public_revealed.csv", "text/csv; charset=utf-8")}
 
 
 DEV_NO_AUTH = os.environ.get("DASHBOARD_DEV_NO_AUTH") == "1" and bool(os.environ.get("DATA_DIR"))   # local only
@@ -361,6 +388,25 @@ class Handler(BaseHTTPRequestHandler):
         path, query = u.path, {k: v[0] for k, v in parse_qs(u.query).items()}
         if path == "/healthz":
             return self._send(200, b"ok", "text/plain")
+        if path in PUBLIC_FILES:
+            name, ctype = PUBLIC_FILES[path]
+            try:
+                return self._send(200, (HERE / name).read_bytes(), ctype)
+            except OSError:
+                return self._send(404, b"not found", "text/plain")
+        if path in PUBLIC_CACHE_FILES:
+            name, ctype = PUBLIC_CACHE_FILES[path]
+            try:
+                refresh()
+                return self._send(200, (CACHE / name).read_bytes(), ctype)
+            except Exception:                     # noqa: BLE001 - not published yet
+                return self._send(404, b"not published yet", "text/plain")
+        if path in PUBLIC_ROUTES:
+            try:
+                refresh()
+                return self._json(200, PUBLIC_ROUTES[path]())
+            except Exception as e:                # noqa: BLE001
+                return self._json(500, {"error": f"{type(e).__name__}"})
         me = self._email()
         if path in ("/", "/index.html"):
             if me:

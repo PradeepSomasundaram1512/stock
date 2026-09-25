@@ -3,21 +3,22 @@ Runs the pre-registered tests in paper_results/forward_test_prereg.md.
 
     python forward_test.py walkforward [path/to/paper.db]     early vs. late window of the development sample
     python forward_test.py forward path/to/live_backtest.db   signals on/after the freeze date, matured only
+        options:  --out FILE   write the JSON there (default paper_results/forward_<mode>.json)
+                  --discord    post a short status to the Discord webhook (used by the weekly cloud job)
 
 The hypotheses, thresholds and minimum sample are fixed in the pre-registration and repeated as
 constants here; change them only with a visible git diff. Output: paper_results/forward_<mode>.json
 """
 import json
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
-import paper_analysis as pa
+import audit_core as pa    # light-weight (no matplotlib/scipy): runs in the cloud image too
 
-# paper_analysis reads sys.argv[1] as its DB path at import, so this script names the DB explicitly
 DEV_DB = Path(__file__).parent.parent / "paper/data/backtest_ec2_2026-01-06_to_2026-09-24.db"
 FREEZE = pd.Timestamp("2026-09-25")
 TAU = 0.85                  # H1 confidence gate
@@ -29,8 +30,7 @@ rng = np.random.default_rng(2028)
 
 def build(db: str, end: pd.Timestamp) -> pd.DataFrame:
     """One row per matured BUY signal with its CAR and the per-date rule/universe CARs."""
-    pa.DB = Path(db)
-    sig, _, _ = pa.load_signals()
+    sig, _, _ = pa.load_signals(db)
     fixed = pa.fixed_universe()
     P = pa.load_panel(sorted(set(sig.ticker.unique()) | set(fixed)), sig.day.min() - pd.Timedelta(days=140), end)
     dates = P["C"].index
@@ -74,7 +74,8 @@ def analyse(df: pd.DataFrame, label: str) -> dict:
     out["n_gated"] = int((df.conf >= TAU).sum())
     out["mean_car_all"] = float(df.car.mean())
     out["H1_gated_minus_all"] = boot(df, gated)
-    out["H2_spearman_conf_car"] = boot(df, lambda d: stats.spearmanr(d.conf, d.car)[0])
+    # Spearman = Pearson on average ranks (pandas' own spearman needs scipy, which the cloud image omits)
+    out["H2_spearman_conf_car"] = boot(df, lambda d: d.conf.rank().corr(d.car.rank()))
     out["H3_reversal_minus_universe"] = boot(df, lambda d: (d.rev - d.uni).mean())
     out["H4_llm_minus_reversal"] = boot(df, lambda d: (d.car - d.rev).mean())
     return out
@@ -91,23 +92,54 @@ def show(o: dict):
             print(f"   {lab:42} {f(r['est'])} [{f(r['lo'])}, {f(r['hi'])}]  MDE {f(r['mde']).lstrip('+')}  {'DETECTABLE' if r['detectable'] else 'not detectable'}")
 
 
+def discord_status(res: list):
+    """One short message: how much forward data has matured and, once enough, each hypothesis."""
+    import requests
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook:
+        return
+    o = res[0]
+    lines = [f"Matured signals: **{o['n_signals']}** of {MIN_SIGNALS} needed, {o['n_blocks']} of {MIN_BLOCKS} independent 10-day blocks."]
+    lines.append(o.get("verdict") or "Minimum sample reached: results below are reportable.")
+    for k, lab in (("H1_gated_minus_all", "H1 confidence gate"), ("H2_spearman_conf_car", "H2 confidence rank"),
+                   ("H3_reversal_minus_universe", "H3 reversal rule"), ("H4_llm_minus_reversal", "H4 LLM vs reversal")):
+        if k in o:
+            r = o[k]
+            lines.append(f"{lab}: {r['est']:+.4f} [{r['lo']:+.4f}, {r['hi']:+.4f}] " + ("**detectable**" if r["detectable"] else "not detectable"))
+    body = {"embeds": [{"title": "Weekly forward-test status", "description": "\n".join(lines), "color": 0x5865F2}]}
+    try:
+        requests.post(webhook, json=body, timeout=10)
+    except Exception as exc:   # noqa: BLE001 - a failed post must not fail the job
+        print(f"discord post failed: {exc}", file=sys.stderr)
+
+
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "walkforward"
+    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
+    opts = sys.argv[1:]
+    out_path = Path(opts[opts.index("--out") + 1]) if "--out" in opts else None
+    if out_path is not None:
+        argv = [a for a in argv if a != str(out_path)]
+    mode = argv[0] if argv else "walkforward"
     if mode == "walkforward":
-        db = sys.argv[2] if len(sys.argv) > 2 else str(DEV_DB)
+        db = argv[1] if len(argv) > 1 else str(DEV_DB)
         df = build(db, pa.DATA_END)
         cut = sorted(df.i.unique())[int(SPLIT * df.i.nunique())]
         res = [analyse(df[df.i < cut], "early (first 60% of dates)"), analyse(df[df.i >= cut], "late (last 40% of dates)"), analyse(df, "all development data")]
     elif mode == "forward":
-        db = sys.argv[2]
+        db = argv[1]
         df = build(db, pd.Timestamp.today().normalize() + pd.Timedelta(days=1))
         df = df[pd.to_datetime(df.day) >= FREEZE]
-        res = [analyse(df, "forward (on/after 2026-09-25, matured only)")] if len(df) else [{"window": "forward", "n_signals": 0, "n_blocks": 0, "verdict": "no matured signals yet"}]
+        res = [analyse(df, "forward (on/after 2026-09-25, matured only)")] if len(df) else [
+            {"window": "forward", "n_signals": 0, "n_blocks": 0, "verdict": f"insufficient data (0 signals, 0 blocks; need {MIN_SIGNALS} and {MIN_BLOCKS})"}]
     else:
         sys.exit(__doc__)
     for r in res:
         show(r)
-    (pa.RES / f"forward_{mode}.json").write_text(json.dumps(res, indent=1, default=float))
+    out_path = out_path or (Path(__file__).parent / "paper_results" / f"forward_{mode}.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(res, indent=1, default=float))
+    if "--discord" in opts:
+        discord_status(res)
 
 
 if __name__ == "__main__":

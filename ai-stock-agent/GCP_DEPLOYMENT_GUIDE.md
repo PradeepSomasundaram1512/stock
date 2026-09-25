@@ -395,3 +395,24 @@ Local development: `DATA_DIR=/path/to/copies DASHBOARD_DEV_NO_AUTH=1 python dash
 - **History**: any past scan, or one ticker's full decision and outcome history; CSV export.
 - **Scoreboard**: the forward-audit result (LLM vs. matched placebo, random stocks and rule baselines, with confidence intervals), a confidence-calibration chart, and live exit outcomes. The audit numbers come from `dashboard/scoreboard.json`; regenerate with `python dashboard/build_scoreboard.py` after re-running `paper_analysis.py`/`paper_baselines.py`, then redeploy.
 - **Model arena**: production vs. shadow model: agreement matrix, every disagreement, and the move since each call (unmatured, early evidence only).
+
+## Weekly forward test
+
+`stock-scanner-forward-test` (Saturdays 09:00 ET, main job, `entrypoint.sh --forward-test`) runs `forward_test.py forward`
+on the live database, writes `data/forward_test.json` (shown on the dashboard's Scoreboard tab) and posts a short status to
+Discord. The hypotheses, thresholds and minimum sample (300 matured signals and 20 independent 10-day blocks) are fixed in
+`paper_results/forward_test_prereg.md`, committed before any outcome existed; below the minimum it reports "insufficient data".
+`forward_test.py` and `audit_core.py` need only pandas/numpy/yfinance, so they run in the cloud image (no scipy/matplotlib).
+The placebo universe list lives in `audit/sp500_universe.csv`.
+
+## Public track-record page and tamper-evident log
+
+`/public` needs no sign-in. Its allowlist is exact (`PUBLIC_FILES`, `PUBLIC_ROUTES` in `dashboard/server.py`) and it reads no row
+from the live decision tables, only `scoreboard.json`, `forward_test.json` and the chain files, so it cannot leak a current signal.
+
+`track_record.py` (run by the daily digest) hashes each completed day's decisions (SHA-256), chains the days
+(`hash_n = sha256(hash_{n-1} | day | digest | rows)`), stores `data/track_record_chain.json`, and releases the raw decisions only
+after 45 days as `data/public_revealed.csv`. The chain head is posted to Discord daily as an outside timestamp. Anyone can run
+`python verify_chain.py verify chain.json revealed.csv` (stdlib only, served at `/public/verify_chain.py`). It proves released
+decisions were not edited after commit; it cannot prove a day's list was complete when committed. Tests: `python tests/test_track_record.py`,
+`python dashboard/test_auth.py`.

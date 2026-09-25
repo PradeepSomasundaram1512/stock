@@ -37,6 +37,7 @@ import pandas as pd
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 RES = HERE / "paper_results"
+ROOT_AUDIT = HERE / "audit"
 PAPER = HERE.parent / "paper"
 DB = Path(sys.argv[1]) if len(sys.argv) > 1 else PAPER / "data/backtest_ec2_2026-01-06_to_2026-09-24.db"
 LOG = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "aws-ec2-backup-2026-09-25/logs/scanner.log"
@@ -204,7 +205,7 @@ def main():
     ops["period"] = period_robustness()
     ops["audit"] = audit_rationale(real)
     # how much of the traded universe is actually S&P 500 (the scanner's list is broader)
-    u = pd.read_csv(RES / "sp500_universe.csv")
+    u = pd.read_csv(ROOT_AUDIT / "sp500_universe.csv")
     start = set(u.loc[u.in_universe_at_start, "symbol"])
     logt = {t.replace(".", "-") for (t,) in sqlite3.connect(DB).execute("select distinct ticker from recommendations")}
     buys_ev = pd.read_csv(RES / "analysis_buy_signals.csv")

@@ -60,6 +60,7 @@ create_or_update "stock-scanner-hourly-scan"      "0 10-15 * * 1-5" '["--hourly-
 create_or_update "stock-scanner-stop-loss-check"  "*/5 9-16 * * 1-5" '["--stop-loss-check"]' "$LIGHT_JOB_NAME"
 create_or_update "stock-scanner-closing-recap"    "45 15 * * 1-5" '["--closing-recap"]'
 create_or_update "stock-scanner-daily-digest"     "20 16 * * 1-5" '["--digest"]' "$LIGHT_JOB_NAME"
+create_or_update "stock-scanner-forward-test"    "0 9 * * 6"     '["--forward-test"]'
 create_or_update "stock-scanner-swing-trade"      "5 10 * * 1-5"  '["--swing-trade"]'
 
 echo ""

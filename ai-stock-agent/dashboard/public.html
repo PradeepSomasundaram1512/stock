@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Public Track Record</title>
+<meta name="description" content="An AI stock scanner audited in public: forward results against simple baselines, and a tamper-evident log.">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6675;--line:#e3e6ec;--ok:#1a8f4d;--warn:#d98200;--bad:#c62828;--acc:#2f5fd0}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8ebf0;--mute:#98a2b3;--line:#262c36;--ok:#3ecf7c;--warn:#f0a531;--bad:#ff6b6b;--acc:#7aa2ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:26px;line-height:1.2;margin:8px 0 6px;letter-spacing:-.01em}
+h2{font-size:18px;margin:0 0 8px}
+p{margin:8px 0}.mute{color:var(--mute)}.small{font-size:12.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:14px;min-width:0}
+.notice{border-left:4px solid var(--warn);background:var(--card);border-radius:8px;padding:10px 14px;margin-top:14px;font-size:13.5px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.finding{border-left:4px solid var(--acc);padding:10px 14px;background:color-mix(in srgb,var(--acc) 7%,transparent);border-radius:6px;margin:12px 0;font-size:15px}
+svg{width:100%;height:auto;display:block}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:4px 0 12px}.bar>i{display:block;height:100%;background:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--mute);font-weight:600;font-size:12px}td.r,th.r{text-align:right}
+code,pre{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace}pre{background:color-mix(in srgb,var(--ink) 6%,transparent);padding:10px 12px;border-radius:8px;overflow-x:auto;margin:8px 0}
+.hash{word-break:break-all}a{color:var(--acc)}
+ul{margin:6px 0 6px 20px;padding:0}li{margin:3px 0}
+.tblwrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>An AI stock scanner, audited in public</h1>
+<p class="mute">A research project that scans about 470 large US stocks with a language model, logs every call with a timestamp, and checks the results honestly against simple alternatives.</p>
+
+<div class="notice"><b>Not investment advice.</b> This is a research project, not a recommendation service. It does not tell you what to buy or sell, does not know your situation, and places no real orders. Past results say little about the future. Live signals are deliberately <b>not</b> published here; only audited aggregates and delayed data are.</div>
+
+<div class="finding" id="finding">Loading…</div>
+
+<div class="card"><h2>How the model's picks compare</h2>
+  <p class="small mute">10-day return after removing the market's move (beta-adjusted), with a 95% confidence interval. Where intervals overlap zero and each other, the strategies cannot be told apart.</p>
+  <div id="forest"></div></div>
+
+<div class="card"><h2>Is the model's confidence meaningful?</h2>
+  <p class="small mute" id="calibtext"></p><div id="calib" style="max-width:460px"></div></div>
+
+<div class="card"><h2>Forward test, written down before the results existed</h2>
+  <p class="small mute">The hypotheses, thresholds and minimum sample were committed before any outcome could be measured (freeze date 2026-09-25). No verdict is reported until both minimums are met, and it is updated weekly.</p>
+  <div id="fwtext" class="small"></div>
+  <div id="fw1"></div><div id="fw2"></div></div>
+
+<div class="card"><h2>Tamper-evident log</h2>
+  <p>Every day's model decisions are reduced to a fingerprint (SHA-256) and chained to the day before, so changing any past decision would change every fingerprint after it. The newest fingerprint is also posted daily to an outside chat channel as a timestamp. The decisions themselves are released after 45 days, so this page is never a live signal feed but can be checked later.</p>
+  <div class="tblwrap"><table id="chaintbl"></table></div>
+  <p><b>Verify it yourself</b> (Python 3, no packages):</p>
+  <pre>curl -O __ORIGIN__/public/chain.json
+curl -O __ORIGIN__/public/revealed.csv
+curl -O __ORIGIN__/public/verify_chain.py
+python verify_chain.py verify chain.json revealed.csv</pre>
+  <p class="small mute">What this proves: released decisions were not altered after being committed. What it does not prove: that a day's list was complete when committed, or the exact time of commitment beyond the outside timestamps. It is a check on honesty of the record, not on profitability.</p></div>
+
+<div class="card"><h2>Method and limits</h2>
+  <ul class="small">
+    <li>Signals come from the live system, January to September 2026; the evaluated sample is in the summary above. Results are not re-tuned to look better.</li>
+    <li>Comparison groups: stocks with the same RSI, momentum and volatility that the model did not pick; random S&amp;P 500 stocks; and one-line rules (momentum, lowest RSI, lowest volatility, everything equal-weighted).</li>
+    <li>Uncertainty comes from a block bootstrap over 10-trading-day blocks, since signals on nearby days are not independent. With this many independent blocks, only fairly large effects could be detected.</li>
+    <li>One model family and one market period. Prices come from a free data source that is revised over time, so exact figures can shift slightly between re-runs.</li>
+    <li id="conflimit">The system's stated confidence should not be read as a probability.</li>
+  </ul></div>
+
+<p class="small mute" style="margin-top:18px">Research project. Nothing here is an offer, solicitation or advice. Do not make financial decisions based on this page.</p>
+</div>
+<script src="/charts.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); kids.forEach(k => e.append(k)); return e; };
+const pct = (x, d = 0) => x == null ? "–" : (x * 100).toFixed(d) + "%";
+const spct = (x, d = 2) => x == null ? "–" : (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(d) + "%";
+const num = (x, d = 2) => x == null ? "–" : Number(x).toFixed(d);
+const bar = (v, n) => el("div", {className: "bar"}, el("i", {style: "width:" + Math.min(100, v / n * 100) + "%"}));
+fetch("/api/public").then(r => r.json()).then(d => {
+  const a = d.audit; if (!a) { $("#finding").textContent = "Results are not published yet."; return; }
+  const lm = a.llm_minus_matched, c = a.calibration, sig = lm.lo > 0 || lm.hi < 0;
+  $("#finding").textContent = `Across ${a.n_signals.toLocaleString()} BUY signals on ${a.n_days} days (${a.period.first} to ${a.period.eval_end}), the model's picks beat similar stocks chosen without it by ${spct(lm.mean)} over 10 days (95% CI ${spct(lm.lo)} to ${spct(lm.hi)}). ` +
+    (sig ? "That difference is statistically distinguishable from zero." : "That is not distinguishable from zero: no edge was detected, though a small one cannot be ruled out.");
+  forest($("#forest"), a.car10);
+  const flat = c.spearman.lo <= 0 && c.spearman.hi >= 0, over = c.mean_confidence - c.win_rate > 0.1;
+  $("#calibtext").textContent = `Average stated confidence was ${pct(c.mean_confidence)}; ${pct(c.win_rate)} of signals gained. Points on the dashed diagonal would mean the confidence is trustworthy.` +
+    (flat ? " Here the line is flat: higher stated confidence did not go with better outcomes (rank correlation " + num(c.spearman.mean, 3) + ", 95% CI " + num(c.spearman.lo, 3) + " to " + num(c.spearman.hi, 3) + ")." : " Rank correlation with outcomes was " + num(c.spearman.mean, 3) + ".");
+  $("#conflimit").textContent = over ? "The system's stated confidence has been much higher than its hit rate, and it should not be read as a probability." : "The system's stated confidence should not be read as a probability.";
+  calibChart($("#calib"), c.bins);
+  const f = d.forward, need = d.forward_needs;
+  $("#fwtext").textContent = f ? (f.verdict || "Minimum sample reached.") : "No signal from the forward window has matured yet (each needs 10 trading days).";
+  $("#fw1").replaceChildren(el("div", {className: "small", textContent: `Matured signals: ${f ? f.n_signals : 0} of ${need.signals}`}), bar(f ? f.n_signals : 0, need.signals));
+  $("#fw2").replaceChildren(el("div", {className: "small", textContent: `Independent 10-day blocks: ${f ? f.n_blocks : 0} of ${need.blocks}`}), bar(f ? f.n_blocks : 0, need.blocks));
+  const ch = d.chain, t = $("#chaintbl"); t.replaceChildren();
+  [["Days committed", ch.days || "none yet"], ["First / last day", ch.days ? `${ch.first} / ${ch.last}` : "–"], ["Decisions committed", ch.rows ? ch.rows.toLocaleString() : "–"],
+   ["Decisions released so far", d.revealed_rows ? d.revealed_rows.toLocaleString() : "none yet (released after 45 days)"], ["Newest fingerprint", ch.head || "–"]]
+    .forEach(([k, v]) => t.append(el("tr", {}, el("th", {textContent: k}), el("td", {className: k === "Newest fingerprint" ? "hash" : "", textContent: v}))));
+}).catch(() => { $("#finding").textContent = "Could not load results."; });
+document.querySelectorAll("pre").forEach(p => p.textContent = p.textContent.replaceAll("__ORIGIN__", location.origin));
+</script>
+</body>
+</html>

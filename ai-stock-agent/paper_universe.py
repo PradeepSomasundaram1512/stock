@@ -15,7 +15,7 @@ Sources (fetched once; the result is saved so the analysis is reproducible offli
 Set operations make the reversal safe even if one source lags the other.
 
 Run:    venv/bin/python paper_universe.py
-Output: paper_results/sp500_universe.csv  (symbol, in_universe_at_start)
+Output: audit/sp500_universe.csv  (symbol, in_universe_at_start)
 """
 
 import io
@@ -76,8 +76,8 @@ def main():
 
     out = pd.DataFrame({"symbol": sorted(members | current)})
     out["in_universe_at_start"] = out.symbol.isin(members)
-    out.to_csv(RES / "sp500_universe.csv", index=False)
-    print(f"saved {RES / 'sp500_universe.csv'} ({int(out.in_universe_at_start.sum())} at start, {len(out)} rows)")
+    out.to_csv(Path(__file__).parent / "audit" / "sp500_universe.csv", index=False)
+    print(f"saved {Path(__file__).parent / 'audit' / 'sp500_universe.csv'} ({int(out.in_universe_at_start.sum())} at start, {len(out)} rows)")
 
 
 if __name__ == "__main__":
