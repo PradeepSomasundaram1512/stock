@@ -8,6 +8,8 @@ const fmtDur = ms => { if (ms <= 0) return "now"; const s = Math.floor(ms / 1000
   return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(sec).padStart(2, "0")}s` : `${sec}s`; };
 const utcMs = s => Date.parse(String(s).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? "" : "Z"));
 const clampN = (x, a, b) => Math.max(a, Math.min(b, x));
+/* Market times are shown in New York time and labelled, whatever time zone the viewer is in. */
+const fmtET = ms => new Date(ms).toLocaleString("en-US", {timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit"}) + " ET";
 
 /* ---------- toasts and notifications ---------- */
 function toast(msg, ms = 7000) {
@@ -148,26 +150,42 @@ function initMarkets() {
 /* ---------- ticker chart card ---------- */
 function chartCard(t) {
   const RANGES = [["5d", "5D"], ["1mo", "1M"], ["3mo", "3M"], ["6mo", "6M"], ["1y", "1Y"]];
-  let rng = "6mo", cmp = false, data = null;
+  let rng = "6mo", cmp = false, data = null, showPast = false;
   const readout = el("div", {className: "small mute chart-read", textContent: "Touch or hover the chart to read prices."}), box = el("div", {className: "chartbox"});
   const seg = el("div", {className: "seg"}), cmpBtn = el("button", {textContent: "vs SPY", className: "cmp", "aria-pressed": "false"});
   RANGES.forEach(([v, l]) => seg.append(el("button", {textContent: l, className: v === rng ? "on" : "", onclick: e => { rng = v; [...seg.children].forEach(x => x.classList.toggle("on", x === e.target)); load(); }})));
   cmpBtn.onclick = () => { cmp = !cmp; cmpBtn.classList.toggle("on", cmp); cmpBtn.setAttribute("aria-pressed", String(cmp)); load(); };
-  const card = el("div", {className: "card", style: "margin-bottom:12px"}, el("div", {className: "toolbar"}, el("b", {textContent: t}), seg, cmpBtn), readout, box,
-    el("div", {className: "mute small", textContent: "Triangles: the model's calls (up = BUY-type, down = SELL-type). Dashed lines: target and stop of the latest call. Prices ~15 min delayed."}));
+  const pastBtn = el("button", {textContent: "Past calls", className: "cmp", "aria-pressed": "false", onclick: () => { showPast = !showPast; pastBtn.classList.toggle("on", showPast); pastBtn.setAttribute("aria-pressed", String(showPast)); draw(); }});
+  const card = el("div", {className: "card", style: "margin-bottom:12px"}, el("div", {className: "toolbar"}, el("b", {textContent: t}), seg, cmpBtn, pastBtn), readout, box,
+    el("div", {className: "mute small", textContent: "Triangle: the model's latest call (turn on \"Past calls\" for earlier ones). Dashed lines: target and stop of that call. Prices ~15 min delayed."}));
   const fmtTs = ts => new Date(ts).toLocaleString(undefined, {month: "short", day: "numeric", hour: RANGES.slice(0, 2).some(r => r[0] === rng) ? "numeric" : undefined, minute: RANGES.slice(0, 2).some(r => r[0] === rng) ? "2-digit" : undefined});
   const draw = () => {
     if (!data) return;
+    const decisions = data.decisions || [], newest = decisions.slice(-1)[0];
+    // Default: only the model's LATEST call. "Past calls" adds the earlier recommendations and decisions.
+    const calls = showPast ? [...(data.recommendations || []).map(r => ({at: r.at, kind: r.decision, conf: r.confidence})), ...decisions.map(r => ({at: r.at, kind: r.decision, conf: r.confidence}))]
+                           : (newest ? [{at: newest.at, kind: newest.decision, conf: newest.confidence}] : []);
     const seen = new Set(), markers = [];
-    [...(data.recommendations || []).map(r => ({at: r.at, kind: r.decision, conf: r.confidence, extra: r.outcome})), ...(data.decisions || []).map(r => ({at: r.at, kind: r.decision, conf: r.confidence}))]
-      .filter(m => m.kind && m.kind !== "HOLD").forEach(m => { const ts = utcMs(m.at), key = new Date(ts).toISOString().slice(0, 10) + m.kind; if (seen.has(key)) return; seen.add(key);
-        markers.push({ts, kind: m.kind, detail: `${m.kind}${m.conf != null ? " at " + pct(m.conf) + " confidence" : ""} · ${new Date(ts).toLocaleDateString()}`}); });
-    const levels = [], last = (data.recommendations || []).filter(r => r.price_target && r.stop_loss).slice(-1)[0];
-    if (last) levels.push({price: last.price_target, label: "Target " + usd(last.price_target), color: "var(--buy)"}, {price: last.stop_loss, label: "Stop " + usd(last.stop_loss), color: "var(--sell)"});
+    calls.filter(m => m.kind && m.kind !== "HOLD").forEach(m => { const ts = utcMs(m.at), key = new Date(ts).toISOString().slice(0, 10) + m.kind; if (seen.has(key)) return; seen.add(key);
+      markers.push({ts, kind: m.kind, detail: `${m.kind}${m.conf != null ? " at " + pct(m.conf) + " confidence" : ""} · ${new Date(ts).toLocaleDateString()}`}); });
+    const levels = [];
+    if (newest && /BUY/.test(newest.decision || "") && newest.price_target && newest.stop_loss)
+      levels.push({price: newest.price_target, label: "Target " + usd(newest.price_target), color: "var(--buy)"}, {price: newest.stop_loss, label: "Stop " + usd(newest.stop_loss), color: "var(--sell)"});
     candleChart(box, data.candles, {markers, levels, cmp: data.spy && data.spy.map(c => [c[0], c[4]]),
       onScrub: c => { readout.textContent = c ? `${fmtTs(c[0])}   O ${num(c[1])}  H ${num(c[2])}  L ${num(c[3])}  C ${num(c[4])}   Vol ${(c[5] / 1e6).toFixed(2)}M   ${spct(c[4] / c[1] - 1)}` : "Touch or hover the chart to read prices."; }});
   };
   const load = async () => { box.textContent = "Loading chart…"; try { data = await get(`/api/chart?t=${encodeURIComponent(t)}&range=${rng}${cmp ? "&cmp=1" : ""}`); if (data.error) { box.textContent = data.error; return; } draw(); } catch (e) { box.textContent = "Could not load the chart."; } };
   redrawChart = draw; load();
   return card;
+}
+
+/* ---------- latest call for a ticker ---------- */
+function latestCallBanner(t, d) {
+  const c = d.latest_call, box = el("div", {className: "card", style: "margin-bottom:12px"});
+  if (!c) { box.append(el("div", {className: "mute", textContent: `${t} has not been analysed by the scanner yet.`})); return box; }
+  const when = fmtET(utcMs(c.at));
+  box.append(el("div", {className: "toolbar", style: "margin:0"}, el("b", {textContent: "Latest call"}), pill(c.decision), el("span", {textContent: c.confidence != null ? pct(c.confidence) + " confidence" : ""}),
+    c.final ? pill(c.final) : "", el("span", {className: "mute small", textContent: when + (c.in_latest_scan ? " · from the latest scan" : " · not analysed in the latest scan, this is its most recent call")})));
+  if (c.reasoning) box.append(el("div", {className: "small mute", style: "margin-top:6px", textContent: c.reasoning}));
+  return box;
 }

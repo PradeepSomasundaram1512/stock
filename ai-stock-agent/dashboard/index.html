@@ -131,10 +131,6 @@ button.cmp.on{background:var(--acc);color:#fff;border-color:var(--acc)}
     <div class="tblwrap"><table id="cands"></table></div>
   </div>
   <div class="grid two">
-    <div class="card"><h2>Model health per day <span class="mute small">(answered vs. fallback)</span></h2><div id="healthchart"></div></div>
-    <div class="card"><h2>BUY signals per day</h2><div id="buychart"></div></div>
-  </div>
-  <div class="grid two">
     <div class="card"><h2>Paper account</h2><div id="paperacct"></div><div class="tblwrap"><table id="positions"></table></div></div>
     <div class="card"><h2>Swing trades</h2><div class="tblwrap"><table id="swing"></table></div></div>
   </div>
@@ -168,6 +164,12 @@ button.cmp.on{background:var(--acc);color:#fff;border-color:var(--acc)}
     </div>
     <div id="histout"></div>
   </div>
+  <details class="card" id="trends" style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">Trends across all days</summary>
+    <div class="grid two" style="margin-top:12px">
+      <div><h2>Model health per day <span class="mute small">(answered vs. fallback)</span></h2><div id="healthchart"></div></div>
+      <div><h2>BUY signals per day</h2><div id="buychart"></div></div>
+    </div>
+  </details>
 </section>
 
 <section class="tab" id="tab-scoreboard"><div id="scoreout"></div></section>
@@ -244,20 +246,17 @@ async function loadContext() {
 
 /* ---------- overview ---------- */
 async function loadOverview() {
-  const [s, l, h, p] = await Promise.all([get("/api/summary"), get("/api/latest"), get("/api/history"), get("/api/paper")]);
-  const t = s.today, k = $("#kpis"); k.replaceChildren();
-  if (!t) k.append(kpi("No decisions logged yet", "–")); else {
+  const [s, l, p] = await Promise.all([get("/api/summary"), get("/api/latest"), get("/api/paper")]);
+  const t = s.scan, k = $("#kpis"); k.replaceChildren();
+  if (!t) k.append(kpi("No scan logged yet", "–")); else {
     const fb = t.decisions ? t.fallbacks / t.decisions : 0;
-    k.append(kpi("Scans on " + s.day, t.scans), kpi("Candidates analysed", t.decisions), kpi("Model answered", pct(t.decisions ? t.ok / t.decisions : null), fb < .1 ? "ok" : "bad"),
+    k.append(kpi("Candidates in this scan", t.decisions), kpi("Model answered", pct(t.decisions ? t.ok / t.decisions : null), fb < .1 ? "ok" : "bad"),
       kpi("Fell back to HOLD", pct(fb), fb < .1 ? "ok" : "bad"), kpi("BUY calls", t.buys), kpi("Reached signal list", t.signals));
-    const sh = s.shadow_today; if (sh && sh.n) k.append(kpi("Shadow agreement", sh.both ? pct(sh.agree / sh.both) : "–"));
+    const sh = s.shadow_scan; if (sh && sh.n) k.append(kpi("Shadow agreement (this scan)", sh.both ? pct(sh.agree / sh.both) : "–"));
   }
   $("#asof").textContent = "Data as of " + s.as_of + " · " + s.recommendations.total.toLocaleString() + " logged recommendations, " + s.recommendations.first + " to " + s.recommendations.last;
-  $("#scanmeta").textContent = l.scan_id ? `${l.at ? l.at.slice(0, 16).replace("T", " ") + " UTC" : ""} · ${l.candidates.length} candidates · click a row for the model's reasoning` : "";
+  $("#scanmeta").textContent = l.scan_id ? `${fmtET(utcMs(l.at))} · ${l.candidates.length} candidates · click a row for the model's reasoning` : "";
   dataTable($("#cands"), CAND_COLS, l.candidates, {sort: "final", detail: candDetail, empty: "No scans logged yet."});
-  const recent = a => a.slice(-45);
-  stacked($("#healthchart"), recent(h.health).map(d => ({...d, ok: d.ok || 0, fallbacks: d.fallbacks || 0})), [["ok", "var(--ok)"], ["fallbacks", "var(--bad)"]]);
-  stacked($("#buychart"), recent(h.recommendations).map(d => ({...d, other: d.n - (d.buys || 0)})), [["buys", "var(--buy)"], ["other", "var(--line)"]]);
   paperData = p; renderPaper();
 }
 
@@ -270,6 +269,11 @@ async function loadHistory() {
     tk.tickers.forEach(t => $("#ticklist").append(el("option", {value: t})));
   }
   if (!$("#tickin").value) await pickScan();
+  if (!$("#healthchart").firstChild) {
+    const h = await get("/api/history"), recent = a => a.slice(-45);
+    stacked($("#healthchart"), recent(h.health).map(d => ({...d, ok: d.ok || 0, fallbacks: d.fallbacks || 0})), [["ok", "var(--ok)"], ["fallbacks", "var(--bad)"]]);
+    stacked($("#buychart"), recent(h.recommendations).map(d => ({...d, other: d.n - (d.buys || 0)})), [["buys", "var(--buy)"], ["other", "var(--line)"]]);
+  }
 }
 async function pickScan() {
   $("#tickin").value = ""; const id = $("#scanpick").value; if (!id) { $("#histout").textContent = "No scans logged yet."; return; }
@@ -281,15 +285,17 @@ async function lookup() {
   const t = $("#tickin").value.trim().toUpperCase(); if (!t) return pickScan();
   const d = await get("/api/ticker?t=" + encodeURIComponent(t));
   histRows = d.decisions; histName = "ticker_" + t; $("#histmeta").textContent = `${t}${d.last ? " · last " + usd(d.last) : ""}`;
-  const out = $("#histout"); out.replaceChildren(chartCard(t));
+  const out = $("#histout"); out.replaceChildren(latestCallBanner(t, d), chartCard(t));
   if (!d.decisions.length && !d.recommendations.length) { out.append(el("p", {className: "mute", textContent: "No model decisions logged for " + t + " yet."})); return; }
-  out.append(el("h3", {textContent: "Model decisions (latest first)"}));
-  const t1 = el("table"); out.append(el("div", {className: "tblwrap"}, t1));
+  const prev = el("details", {className: "card", style: "margin-top:12px"}, el("summary", {style: "cursor:pointer;font-weight:600", textContent: `Earlier scans and outcomes (${d.decisions.length} scans, ${d.recommendations.length} recommendations)`}));
+  out.append(prev);
+  prev.append(el("h3", {textContent: "Model decisions (latest first)"}));
+  const t1 = el("table"); prev.append(el("div", {className: "tblwrap"}, t1));
   dataTable(t1, [{key: "decided_at", label: "When (UTC)", cell: r => r.decided_at.slice(0, 16).replace("T", " ")}, {label: "Model", cell: r => pill(r.decision)}, {key: "confidence", label: "Conf", r: 1, cell: r => pct(r.confidence)},
     {label: "Shadow", cell: r => pill(r.shadow_decision)}, {label: "Final", cell: r => r.final ? pill(r.final) : ""}, {key: "price", label: "Price", r: 1, cell: r => usd(r.price)}, {key: "rsi", label: "RSI", r: 1, cell: r => num(r.rsi, 0)}],
     d.decisions, {sort: "decided_at", detail: r => r.reasoning || "No reasoning logged.", empty: "No logged model decisions."});
-  out.append(el("h3", {textContent: "Recommendation outcomes since January"}));
-  const t2 = el("table"); out.append(el("div", {className: "tblwrap"}, t2));
+  prev.append(el("h3", {textContent: "Recommendation outcomes since January"}));
+  const t2 = el("table"); prev.append(el("div", {className: "tblwrap"}, t2));
   dataTable(t2, [{key: "date", label: "Date", cell: r => String(r.date).slice(0, 10)}, {label: "Decision", cell: r => pill(r.decision)}, {key: "confidence", label: "Conf", r: 1, cell: r => pct(r.confidence)},
     {key: "entry_price", label: "Entry", r: 1, cell: r => usd(r.entry_price)}, {label: "Outcome", cell: r => r.outcome}, {key: "profit_loss_pct", label: "P/L %", r: 1, cell: r => r.profit_loss_pct == null ? null : num(r.profit_loss_pct, 2) + "%"}, {label: "Exit", cell: r => r.exit_reason}],
     d.recommendations, {sort: "date", empty: "None."});
@@ -332,9 +338,12 @@ async function loadScoreboard() {
 }
 
 /* ---------- arena ---------- */
+let arenaScope = "latest";
 async function loadArena() {
-  const d = await get("/api/arena"), out = $("#arenaout"); out.replaceChildren();
-  if (!d.n) { out.append(el("div", {className: "card mute", textContent: "No shadow decisions yet."})); return; }
+  const d = await get("/api/arena?scope=" + arenaScope), out = $("#arenaout"); out.replaceChildren();
+  const seg = el("div", {className: "seg", style: "margin-bottom:10px"}, ...[["latest", "Latest scan"], ["all", "All scans"]].map(([v, l]) => el("button", {textContent: l, className: v === arenaScope ? "on" : "", onclick: () => { arenaScope = v; loadArena().catch(fail); }})));
+  out.append(seg);
+  if (!d.n) { out.append(el("div", {className: "card mute", textContent: arenaScope === "latest" ? "The shadow model did not run on the latest scan (it is skipped if the production model was failing or the daily budget was used)." : "No shadow decisions yet."})); return; }
   const k = el("div", {className: "grid kpis"}, kpi("Shadow model", d.model), kpi("Compared decisions", d.n.toLocaleString()), kpi("Exact agreement", pct(d.agree)), kpi("BUY rate: production", pct(d.buy_rate.prod, 1)), kpi("BUY rate: shadow", pct(d.buy_rate.shadow, 1)),
     kpi("Avg BUY move since call: production", d.prod_buy_move.mean == null ? "–" : spct(d.prod_buy_move.mean) + " (n=" + d.prod_buy_move.n + ")"),
     kpi("Avg BUY move since call: shadow", d.shadow_buy_move.mean == null ? "–" : spct(d.shadow_buy_move.mean) + " (n=" + d.shadow_buy_move.n + ")"));
@@ -342,7 +351,7 @@ async function loadArena() {
   const acts = ["BUY", "HOLD", "WATCH BUY", "WATCH", "WATCH SELL", "SELL"].filter(a => Object.values(d.crosstab).some(r => r[a]));
   const ct = el("table"), c1 = el("div", {className: "card"}, el("h2", {textContent: "Who said what (rows: production, columns: shadow)"}), el("div", {className: "tblwrap"}, ct));
   dataTable(ct, [{label: "Production ↓ / Shadow →", cell: r => r.p}, ...acts.map(a => ({label: a, r: 1, cell: r => r[a] || 0}))], Object.keys(d.crosstab).map(p => ({p, ...d.crosstab[p]})));
-  const dt = el("table"), c2 = el("div", {className: "card"}, el("h2", {textContent: `Disagreements (${d.n_disagree} total, latest ${d.disagreements.length})`}), el("div", {className: "tblwrap"}, dt));
+  const dt = el("table"), c2 = el("div", {className: "card"}, el("h2", {textContent: `Disagreements (${d.n_disagree}${d.scope === "latest" ? " in the latest scan" : " across all scans"})`}), el("div", {className: "tblwrap"}, dt));
   dataTable(dt, [{key: "at", label: "When (UTC)", cell: r => r.at.slice(0, 16).replace("T", " ")}, {label: "Ticker", cell: r => tickLink(r.ticker)}, {label: "Production", cell: r => pill(r.prod)}, {key: "prod_conf", label: "Conf", r: 1, cell: r => pct(r.prod_conf)},
     {label: "Shadow", cell: r => pill(r.shadow)}, {key: "shadow_conf", label: "Conf", r: 1, cell: r => pct(r.shadow_conf)}, {key: "move", label: "Move since", r: 1, cell: r => spct(r.move)}], d.disagreements, {sort: "at"});
   out.append(c1, el("div", {style: "height:12px"}), c2);

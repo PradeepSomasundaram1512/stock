@@ -86,23 +86,26 @@ def _table_exists(con, name) -> bool:
     return bool(con.execute("select 1 from sqlite_master where name=?", (name,)).fetchone())
 
 
+def _latest_scan_id(con):
+    r = con.execute("select scan_id from llm_decisions order by decided_at desc limit 1").fetchone()
+    return r[0] if r else None
+
+
 def summary() -> dict:
+    """Describes the most recent scan only (never a whole day or several scans added together)."""
     con = db()
-    day = con.execute("select max(substr(decided_at,1,10)) from llm_decisions").fetchone()[0]
-    out = {"day": day, "as_of": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(_fetched or time.time()))}
-    if day:
-        out["today"] = dict(con.execute(
-            "select count(distinct scan_id) scans, count(*) decisions, sum(llm_status='ok') ok, "
-            "sum(llm_status='fallback_error') fallbacks, sum(raw_decision='BUY' and llm_status='ok') buys, "
-            "sum(in_signal_list=1) signals from llm_decisions where decided_at like ?", (day + "%",)).fetchone())
+    sid = _latest_scan_id(con)
+    out = {"as_of": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(_fetched or time.time())), "scan_id": sid}
+    if sid:
+        out["scan"] = dict(con.execute(
+            "select max(decided_at) at, count(*) decisions, sum(llm_status='ok') ok, sum(llm_status='fallback_error') fallbacks, "
+            "sum(raw_decision='BUY' and llm_status='ok') buys, sum(in_signal_list=1) signals from llm_decisions where scan_id=?", (sid,)).fetchone())
         if _table_exists(con, "shadow_decisions"):
-            out["shadow_today"] = dict(con.execute(
+            out["shadow_scan"] = dict(con.execute(
                 "select count(*) n, sum(s.llm_status='ok') ok, coalesce(sum(s.est_cost_usd),0) cost, "
                 "sum(s.llm_status='ok' and p.llm_status='ok' and s.decision=p.raw_decision) agree, "
                 "sum(s.llm_status='ok' and p.llm_status='ok') both "
-                "from shadow_decisions s left join llm_decisions p on p.scan_id=s.scan_id and p.ticker=s.ticker "
-                "where s.decided_at like ?", (day + "%",)).fetchone())
-            out["shadow_total_cost"] = con.execute("select coalesce(sum(est_cost_usd),0) from shadow_decisions").fetchone()[0]
+                "from shadow_decisions s left join llm_decisions p on p.scan_id=s.scan_id and p.ticker=s.ticker where s.scan_id=?", (sid,)).fetchone())
     r = con.execute("select count(*), min(recommendation_date), max(recommendation_date) from recommendations").fetchone()
     out["recommendations"] = {"total": r[0], "first": (r[1] or "")[:10], "last": (r[2] or "")[:10]}
     return out
@@ -266,8 +269,9 @@ def chart(q=None) -> dict:
         "select recommendation_date at, decision, confidence, entry_price, price_target, stop_loss, outcome, exit_date, exit_price "
         "from recommendations where ticker=? and recommendation_date>=? order by recommendation_date", t, since)
     out["decisions"] = rows(con,
-        "select decided_at at, raw_decision decision, raw_confidence confidence, price from llm_decisions "
+        "select scan_id, decided_at at, raw_decision decision, raw_confidence confidence, price, price_target, stop_loss from llm_decisions "
         "where ticker=? and decided_at>=? order by decided_at", t, since)
+    out["latest_scan_id"] = _latest_scan_id(con)
     m = _meta(t)
     out["last"] = m["price"] if m else None
     return out
@@ -358,7 +362,15 @@ def ticker(q=None) -> dict:
         "select recommendation_date date, decision, confidence, entry_price, price_target, stop_loss, outcome, "
         "profit_loss_pct, exit_reason, scan_type from recommendations where ticker=? order by recommendation_date desc limit 40", t)
     m = _meta(t) if t else None
-    return {"ticker": t, "last": m["price"] if m else None, "decisions": dec, "recommendations": recs}
+    sid = _latest_scan_id(con)
+    newest = rows(con,
+        "select p.scan_id, p.decided_at at, p.raw_decision decision, p.raw_confidence confidence, p.final_decision final, p.price, "
+        "p.price_target, p.stop_loss, p.reasoning, s.decision shadow_decision, s.confidence shadow_confidence "
+        "from llm_decisions p left join shadow_decisions s on s.scan_id=p.scan_id and s.ticker=p.ticker "
+        "where p.ticker=? order by p.decided_at desc limit 1", t)
+    call = dict(newest[0], in_latest_scan=(newest[0]["scan_id"] == sid)) if newest else None
+    return {"ticker": t, "last": m["price"] if m else None, "latest_call": call, "latest_scan_id": sid,
+            "decisions": dec, "recommendations": recs}
 
 
 def arena(q=None) -> dict:
@@ -370,8 +382,12 @@ def arena(q=None) -> dict:
         "s.decision shadow, s.confidence shadow_conf, s.shadow_model model "
         "from shadow_decisions s join llm_decisions p on p.scan_id=s.scan_id and p.ticker=s.ticker "
         "where s.llm_status='ok' and p.llm_status='ok' order by p.decided_at desc")
+    scope = "all" if (q or {}).get("scope") == "all" else "latest"        # default: only the latest scan
+    sid = _latest_scan_id(con)
+    if scope == "latest":
+        j = [r for r in j if r["scan_id"] == sid]
     n = len(j)
-    out = {"n": n, "model": j[0]["model"] if j else None}
+    out = {"n": n, "model": j[0]["model"] if j else None, "scope": scope, "scan_id": sid, "scan_at": j[0]["at"] if j else None}
     if not n:
         return out
     out["agree"] = sum(1 for r in j if r["prod"] == r["shadow"]) / n

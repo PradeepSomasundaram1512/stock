@@ -16,9 +16,27 @@ sys.path.insert(0, str(HERE))
 TMP = tempfile.mkdtemp()
 Path(f"{TMP}/market_snapshot.json").write_text(json.dumps({"asof": "2099-01-01T00:00:00+00:00", "n": 2, "missing": [], "stocks": {
     "AAPL": {"p": 1.0, "c": 0.01, "c5": 0.02, "rsi": 55.0, "dv": 1e9, "d": "2026-09-25"}, "ZZZZ": {"p": 2.0, "c": -0.02, "c5": 0.0, "rsi": None, "dv": 1e6, "d": "2026-09-25"}}}))
-sqlite3.connect(f"{TMP}/backtest.db").executescript(
-    "create table llm_decisions(decided_at text, scan_id text, llm_status text, raw_decision text, in_signal_list int, ticker text);"
-    "create table recommendations(recommendation_date text, decision text, ticker text, market_trend text);")
+_con = sqlite3.connect(f"{TMP}/backtest.db")
+_con.executescript("""
+create table llm_decisions(scan_id text, decided_at text, ticker text, llm_status text, raw_decision text, raw_confidence real, in_signal_list int,
+  final_decision text, price real, rsi real, trend text, risk_level text, price_target real, stop_loss real, reasoning text);
+create table shadow_decisions(scan_id text, decided_at text, ticker text, llm_status text, decision text, confidence real, shadow_model text, est_cost_usd real);
+create table recommendations(recommendation_date text, ticker text, decision text, confidence real, entry_price real, price_target real, stop_loss real,
+  outcome text, exit_date text, exit_price real, profit_loss_pct real, exit_reason text, scan_type text, market_trend text);
+-- an OLDER scan (AAA buy, BBB hold) and the LATEST scan (BBB sell, CCC buy, AAPL hold)
+insert into llm_decisions values ('old','2026-09-24T19:00:00','AAA','ok','BUY',0.9,1,'BUY',10,50,'up','low',12,9,'old reason');
+insert into llm_decisions values ('old','2026-09-24T19:00:01','BBB','ok','HOLD',0.5,0,null,20,50,'up','low',null,null,'old hold');
+insert into llm_decisions values ('new','2026-09-25T19:00:00','BBB','ok','SELL',0.7,1,'WATCH SELL',21,60,'down','high',null,null,'new sell');
+insert into llm_decisions values ('new','2026-09-25T19:00:01','CCC','ok','BUY',0.8,1,'BUY',30,40,'up','low',33,28,'new buy');
+insert into llm_decisions values ('new','2026-09-25T19:00:02','AAPL','ok','HOLD',0.5,0,null,1,50,'flat','low',null,null,'hold');
+insert into shadow_decisions values ('old','2026-09-24T19:00:00','AAA','ok','HOLD',0.5,'m',0.01);
+insert into shadow_decisions values ('old','2026-09-24T19:00:01','BBB','ok','HOLD',0.5,'m',0.01);
+insert into shadow_decisions values ('new','2026-09-25T19:00:00','BBB','ok','SELL',0.6,'m',0.01);
+insert into shadow_decisions values ('new','2026-09-25T19:00:01','CCC','ok','HOLD',0.5,'m',0.01);
+insert into shadow_decisions values ('new','2026-09-25T19:00:02','AAPL','ok','HOLD',0.5,'m',0.01);
+""")
+_con.commit()
+_con.close()
 os.environ.update(SESSION_SECRET="x" * 40, ALLOWED_EMAILS="alice@example.com,bob@example.com", GOOGLE_CLIENT_ID="test-client",
                   DATA_DIR=TMP)
 os.environ.pop("DASHBOARD_DEV_NO_AUTH", None)
@@ -160,6 +178,8 @@ class HttpTests(unittest.TestCase):
         by = {x["t"]: x for x in d["stocks"]}
         self.assertNotEqual(by["AAPL"]["sector"], "Other")                              # real sector from sectors.json
         self.assertEqual(by["ZZZZ"]["sector"], "Other")
+        self.assertTrue(by["AAPL"]["analysed"])                                                    # in the latest scan
+        self.assertFalse(by["ZZZZ"]["analysed"])
         self.assertEqual({s["name"] for s in d["sectors"]}, {by["AAPL"]["sector"], "Other"})
 
     def test_redirect_login_requires_matching_csrf_token_and_a_valid_google_token(self):
@@ -182,6 +202,32 @@ class HttpTests(unittest.TestCase):
 
     def test_app_install_assets_are_public(self):
         self.assertIn(call(self.base, "/manifest.webmanifest")[0], (200, 404))                   # 404 only if not generated yet
+
+    def test_overview_describes_only_the_latest_scan(self):
+        c = self.cookie("alice@example.com")
+        d = json.loads(call(self.base, "/api/summary", c)[1])
+        self.assertNotIn("today", d)                                            # no whole-day roll-up
+        self.assertEqual((d["scan_id"], d["scan"]["decisions"], d["scan"]["buys"]), ("new", 3, 1))   # not the old scan's rows
+        self.assertEqual(d["shadow_scan"]["n"], 3)
+        l = json.loads(call(self.base, "/api/latest", c)[1])
+        self.assertEqual({x["ticker"] for x in l["candidates"]}, {"BBB", "CCC", "AAPL"})           # AAA (old scan only) is absent
+        self.assertEqual(json.loads(call(self.base, "/api/latest?scan=old", c)[1])["scan_id"], "old")   # older scans stay reachable on request
+
+    def test_ticker_latest_call_says_whether_it_is_from_the_latest_scan(self):
+        c = self.cookie("alice@example.com")
+        bbb = json.loads(call(self.base, "/api/ticker?t=BBB", c)[1])["latest_call"]
+        self.assertEqual((bbb["decision"], bbb["in_latest_scan"]), ("SELL", True))                 # newest, not the earlier HOLD
+        aaa = json.loads(call(self.base, "/api/ticker?t=AAA", c)[1])["latest_call"]
+        self.assertEqual((aaa["decision"], aaa["in_latest_scan"]), ("BUY", False))                 # honest: not in the latest scan
+        self.assertIsNone(json.loads(call(self.base, "/api/ticker?t=NOPE", c)[1])["latest_call"])
+
+    def test_arena_defaults_to_the_latest_scan(self):
+        c = self.cookie("alice@example.com")
+        latest = json.loads(call(self.base, "/api/arena", c)[1])
+        self.assertEqual((latest["scope"], latest["n"], latest["scan_id"]), ("latest", 3, "new"))
+        self.assertEqual(latest["n_disagree"], 1)                                                  # CCC only; the old scan's are excluded
+        everything = json.loads(call(self.base, "/api/arena?scope=all", c)[1])
+        self.assertEqual((everything["scope"], everything["n"]), ("all", 5))
 
     def test_dev_bypass_is_off(self):
         self.assertFalse(server.DEV_NO_AUTH)
