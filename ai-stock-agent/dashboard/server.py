@@ -19,6 +19,8 @@ import os
 import sqlite3
 import threading
 import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -112,16 +114,50 @@ def history() -> dict:
     return {"health": health, "recommendations": recs}
 
 
+_PRICES: dict = {}          # ticker -> (fetched_at, price)
+PRICE_TTL = 60
+
+
+def _quote(t: str):
+    """Last price from Yahoo's public chart endpoint; None if unavailable (callers fall back to cost)."""
+    hit = _PRICES.get(t)
+    if hit and time.time() - hit[0] < PRICE_TTL:
+        return hit[1]
+    try:
+        req = urllib.request.Request(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1d&interval=1d",
+            headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            price = json.load(r)["chart"]["result"][0]["meta"]["regularMarketPrice"]
+    except Exception:                                   # noqa: BLE001 - a missing quote must not break the page
+        return hit[1] if hit else None
+    _PRICES[t] = (time.time(), price)
+    return price
+
+
+def marks(tickers) -> dict:
+    tickers = sorted(set(tickers))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return dict(zip(tickers, pool.map(_quote, tickers)))
+
+
 def paper() -> dict:
     out = {}
     for key, name in (("paper", "paper_trades.json"), ("swing", "swing_trades.json")):
         f = CACHE / name
         out[key] = json.loads(f.read_text()) if f.exists() else None
-    p = out["paper"]
+    p, sw = out["paper"], out["swing"]
+    open_sw = list((sw or {}).get("open_trades", {}))
+    px = marks(list((p or {}).get("positions", {})) + open_sw)
+    out["marks"] = px
     if p:
         invested = sum(v.get("total_cost", 0) for v in p.get("positions", {}).values())
+        market = sum(v["shares"] * (px.get(t) or v["avg_price"]) for t, v in p.get("positions", {}).items())
         out["paper_summary"] = {"starting": p["starting_balance"], "cash": p["cash"], "invested_at_cost": invested,
-                                "book_value": p["cash"] + invested, "updated": p.get("last_updated")}
+                                "market_value": market, "equity": p["cash"] + market,
+                                "pnl": p["cash"] + market - p["starting_balance"],
+                                "all_marked": all(px.get(t) for t in p.get("positions", {})),
+                                "updated": p.get("last_updated")}
     return out
 
 

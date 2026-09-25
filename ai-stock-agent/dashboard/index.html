@@ -17,7 +17,7 @@ h1{font-size:20px;margin:0}h2{font-size:15px;margin:0 0 10px}
 .banner{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:8px 12px;margin-bottom:14px;color:var(--mute);font-size:12px}
 .grid{display:grid;gap:12px}
 .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-.two{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));margin-top:12px}
+.two{grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));margin-top:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
 .kpi .v{font-size:24px;font-weight:650;letter-spacing:-.01em}.kpi .l{color:var(--mute);font-size:12px}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
@@ -68,7 +68,7 @@ button{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
 const $ = s => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); kids.forEach(k => e.append(k)); return e; };
 const pct = (x, d = 0) => x == null ? "–" : (x * 100).toFixed(d) + "%";
-const usd = x => x == null ? "–" : "$" + Number(x).toLocaleString(undefined, {maximumFractionDigits: 2});
+const usd = x => x == null ? "–" : (x < 0 ? "−$" : "$") + Math.abs(Number(x)).toLocaleString(undefined, {maximumFractionDigits: 2});
 const num = (x, d = 2) => x == null ? "–" : Number(x).toFixed(d);
 let cands = [], sortKey = "final", sortDir = -1;
 
@@ -135,13 +135,19 @@ async function load() {
     const recent = a => a.slice(-45);
     stacked($("#healthchart"), recent(h.health).map(d => ({...d, ok: d.ok || 0, fallbacks: d.fallbacks || 0})), [["ok", "var(--ok)"], ["fallbacks", "var(--bad)"]]);
     stacked($("#buychart"), recent(h.recommendations).map(d => ({...d, other: d.n - (d.buys || 0)})), [["buys", "var(--buy)"], ["other", "var(--line)"]]);
-    const ps = p.paper_summary, acct = $("#paperacct"); acct.replaceChildren();
-    if (ps) acct.append(el("div", {className: "mute small", textContent: `Cash ${usd(ps.cash)} · invested at cost ${usd(ps.invested_at_cost)} · book value ${usd(ps.book_value)} of ${usd(ps.starting)} start (positions at cost, not marked to market) · updated ${ps.updated || "?"}`}));
-    const pos = p.paper ? Object.entries(p.paper.positions).map(([t, v]) => ({t, ...v})) : [];
-    table("#positions", [[x => x.t, "Ticker"], [x => x.shares, "Shares", 1], [x => usd(x.avg_price), "Avg", 1], [x => usd(x.total_cost), "Cost", 1]], pos, "No open paper positions.");
-    const sw = p.swing ? [...Object.values(p.swing.open_trades).map(x => ({...x, st: "open"})), ...p.swing.closed_trades.map(x => ({...x, st: "closed"}))] : [];
-    table("#swing", [[x => x.ticker, "Ticker"], [x => x.st, "Status"], [x => x.entry_date, "Entry"], [x => usd(x.entry_price), "In", 1], [x => x.exit_price ? usd(x.exit_price) : "–", "Out", 1],
-      [x => x.exit_price ? ((x.exit_price / x.entry_price - 1) * 100).toFixed(1) + "%" : "–", "P/L", 1]], sw, "No swing trades yet.");
+    const ps = p.paper_summary, acct = $("#paperacct"), mk = p.marks || {}; acct.replaceChildren();
+    if (ps) {
+      const cls = ps.pnl >= 0 ? "ok" : "bad";
+      acct.append(el("div", {className: "kpi"}, el("div", {className: "v " + cls, textContent: usd(ps.equity)}),
+        el("div", {className: "l", textContent: `Equity, ${(ps.pnl >= 0 ? "+" : "") + usd(ps.pnl)} (${(ps.pnl / ps.starting * 100).toFixed(2)}%) vs ${usd(ps.starting)} start · cash ${usd(ps.cash)} · ` + (ps.all_marked ? "marked to last price" : "some positions at cost (no quote)")})));
+    }
+    const pos = p.paper ? Object.entries(p.paper.positions).map(([t, v]) => ({t, ...v, last: mk[t]})) : [];
+    const upl = x => x.last ? ((x.last / x.avg_price - 1) * 100).toFixed(1) + "%" : "–";
+    table("#positions", [[x => x.t, "Ticker"], [x => x.shares, "Shares", 1], [x => usd(x.avg_price), "Avg", 1], [x => x.last ? usd(x.last) : "–", "Last", 1], [upl, "P/L", 1]], pos, "No open paper positions.");
+    const sw = p.swing ? [...Object.values(p.swing.open_trades).map(x => ({...x, st: "open", last: mk[x.ticker]})), ...p.swing.closed_trades.map(x => ({...x, st: "closed"}))] : [];
+    const out = x => x.exit_price || x.last, ret = x => out(x) ? ((out(x) / x.entry_price - 1) * 100).toFixed(1) + "%" : "–";
+    table("#swing", [[x => x.ticker, "Ticker"], [x => x.st, "Status"], [x => x.entry_date, "Entry"], [x => usd(x.entry_price), "In", 1],
+      [x => out(x) ? usd(out(x)) : "–", "Out / last", 1], [ret, "P/L", 1]], sw, "No swing trades yet.");
   } catch (e) { const b = $("#err"); b.style.display = "block"; b.textContent = "Could not load data: " + e.message; }
 }
 

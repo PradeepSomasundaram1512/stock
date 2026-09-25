@@ -352,7 +352,8 @@ rules that pick the same number of stocks on the same dates from the fixed S&P 5
 `./deploy/gcp/06_deploy_dashboard.sh` deploys `stock-dashboard`, a read-only Cloud Run service (scales to zero,
 ~$0 when idle). It reads `backtest.db`, `paper_trades.json` and `swing_trades.json` from the data bucket (cached
 2 minutes) and shows: today's model health, the latest scan's candidates with the production and shadow
-decisions and the model's reasoning, per-day health and BUY-count charts, the paper account, and swing trades.
+decisions and the model's reasoning, per-day health and BUY-count charts, the paper account, and swing trades, with open positions marked to the last Yahoo price (60 s cache; falls back to
+cost if a quote is unavailable).
 It runs as its own service account with `objectViewer` only, and is deployed private. Open it with
 
     gcloud run services proxy stock-dashboard --region=us-central1 --port=8080
