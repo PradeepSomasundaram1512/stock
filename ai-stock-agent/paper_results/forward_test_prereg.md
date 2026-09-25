@@ -46,3 +46,16 @@ No forward signal had matured when this was written; nothing above was changed. 
 - **Input ablation** (`ablation.py outcomes`) is descriptive/exploratory: it reports the 10-day CAR of BUYs that removing an input
   drops, adds or keeps, and no verdict is drawn below 30 matured candidates.
 - **No meta-model is pre-registered as a trading rule:** none had out-of-sample skill (AUC 0.43 to 0.51, LLM outputs added nothing).
+
+## Addendum 2, 2026-09-25 (still before any forward outcome; corrects H5's definition)
+
+While implementing H5, the development sample showed that H5 *as written above* (raw 10-day CAR of the lowest-RSI third vs. all BUYs) has the
+**opposite sign** (+0.69%, not detectable) to the finding it came from: the meta-labeling result was measured against matched placebos, and
+oversold stocks simply bounce more in raw returns. H5 is therefore redefined to the measure it came from:
+
+- **H5 (as redefined):** the mean *alpha over the matched placebo* (CAR minus the mean CAR of the 10 nearest non-selected stocks in RSI,
+  momentum and ATR% space, exactly as in the paper) of the lowest 30% of BUYs by daily RSI is *lower* than that of all BUYs (two-sided).
+
+Development estimates for the redefined H5 (exploratory): -0.10% in the early window, -0.78% in the late window, -0.30% overall (95% CI -0.92 to +0.35, not
+detectable). The -0.77% seen in the meta-labeling study came from the later, out-of-fold subsample only and is not stable across windows,
+so the development evidence for H5 is weak and the forward test is the real test. No forward outcome had matured when this was written.
