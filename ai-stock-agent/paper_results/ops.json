@@ -1,0 +1,174 @@
+{
+  "decisions": 67810,
+  "real": 19467,
+  "fallback": 48343,
+  "reconciles": true,
+  "fallback_quota": 48340,
+  "fallback_json": 2,
+  "fallback_other": 1,
+  "first": "2026-01-26",
+  "last": "2026-09-24",
+  "quota_first": "2026-02-06",
+  "quota_last": "2026-05-18",
+  "quota_days": 28,
+  "active_days": 169,
+  "lat_median_s": 9.381,
+  "lat_p95_s": 19.321,
+  "scans": 842,
+  "scan_median_min": 1.6100916666666667,
+  "selected_median": 38.0,
+  "n_200": 36864,
+  "n_429": 286876,
+  "n_retry": 191299,
+  "n_embed": 19419,
+  "n_dec_lines": 67810,
+  "months": {
+    "2026-01": {
+      "n": 636,
+      "real": 636,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    },
+    "2026-02": {
+      "n": 31666,
+      "real": 2090,
+      "real_pct": 6.60013895029369,
+      "fallback_pct": 93.3998610497063
+    },
+    "2026-03": {
+      "n": 21168,
+      "real": 2402,
+      "real_pct": 11.347316704459562,
+      "fallback_pct": 88.65268329554044
+    },
+    "2026-04": {
+      "n": 4019,
+      "real": 4019,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    },
+    "2026-05": {
+      "n": 3860,
+      "real": 3859,
+      "real_pct": 99.97409326424871,
+      "fallback_pct": 0.025906735751295335
+    },
+    "2026-06": {
+      "n": 3911,
+      "real": 3911,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    },
+    "2026-07": {
+      "n": 722,
+      "real": 722,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    },
+    "2026-08": {
+      "n": 1183,
+      "real": 1183,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    },
+    "2026-09": {
+      "n": 645,
+      "real": 645,
+      "real_pct": 100.0,
+      "fallback_pct": 0.0
+    }
+  },
+  "real_decision_mix": {
+    "HOLD": 71.3,
+    "BUY": 28.5,
+    "SELL": 0.2
+  },
+  "real_buy_share_apr_sep": 30.21131180696004,
+  "power": {
+    "intraday": {
+      "se": 0.0003985255424085231,
+      "mde": 0.0011165031817285823,
+      "hi": 0.0003514551126932896
+    },
+    "h1": {
+      "se": 0.0010990418430388842,
+      "mde": 0.0030790591418300927,
+      "hi": 0.0014182173015390824
+    },
+    "h3": {
+      "se": 0.0030485955841476338,
+      "mde": 0.00854089965961425,
+      "hi": 0.0030176240836751918
+    },
+    "h5": {
+      "se": 0.00491014167424143,
+      "mde": 0.013756179262429677,
+      "hi": 0.005332172883183494
+    },
+    "h10": {
+      "se": 0.005508821429740335,
+      "mde": 0.015433431485239077,
+      "hi": 0.009418428852391001
+    }
+  },
+  "period": {
+    "all": {
+      "n": 1399,
+      "mean": -0.0013043794982481444,
+      "lo": -0.01184928101892558,
+      "hi": 0.009387292956972687,
+      "p": 0.7924,
+      "se": 0.005404761232891757,
+      "mde": 0.015141897998651056
+    },
+    "quota_era": {
+      "n": 213,
+      "mean": 0.020151480071717187,
+      "lo": 0.003658045506153019,
+      "hi": 0.04255822379299134,
+      "p": 0.036,
+      "se": 0.014272281966297996,
+      "mde": 0.03998501107255097
+    },
+    "full_coverage": {
+      "n": 1186,
+      "mean": -0.005157750567727585,
+      "lo": -0.015009508699459153,
+      "hi": 0.004040466083059895,
+      "p": 0.2888,
+      "se": 0.004820064453694788,
+      "mde": 0.013503820272504513
+    }
+  },
+  "audit": {
+    "n_buys": 1493,
+    "traced_pct": 95.91426657736102,
+    "trace_offset_med_min": 0.7454331583333333,
+    "stage3_conf_changed_pct": 40.92178770949721,
+    "stage3_conf_mean_shift": 0.02898044692737429,
+    "cite_oversold_pct": 95.84728734092431,
+    "oversold_but_rsi_ge_35_pct": 0.0,
+    "cite_bearish_trend_pct": 12.525117213663764,
+    "bearish_trend_but_field_bullish_pct": 0.0,
+    "median_rsi_of_buys": 16.851669885587143,
+    "prod_n": 1483,
+    "prod_eod_pct": 89.14362778152393,
+    "prod_stop_n": 161,
+    "prod_mean_pl": 0.13480332829046898,
+    "distinct_factor_strings": 333,
+    "top_factors": {
+      "rsi is oversold": 1034,
+      "high volatility": 369,
+      "overall market is bullish": 297,
+      "positive news sentiment": 245,
+      "bullish market sentiment": 240
+    },
+    "top3_share_pct": 37.95490064746595
+  },
+  "universe": {
+    "index_at_start": 504,
+    "log_tickers": 472,
+    "non_index": 47,
+    "buy_share_non_index_pct": 14.653323802716226
+  }
+}

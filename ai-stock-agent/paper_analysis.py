@@ -33,15 +33,18 @@ import yfinance as yf
 from scipy import stats
 
 HERE = Path(__file__).parent
-ROOT = HERE.parents[1]
-DB = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "aws-ec2-backup-2026-09-25/data/backtest.db"
+ROOT = HERE.parents[1]                 # folder holding the stock/ repo and the EC2 backup
+DB = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parent / "paper/data/backtest_ec2_2026-01-06_to_2026-09-24.db"
 RES = HERE / "paper_results"
-PAPER = ROOT / "paper"
+PAPER = HERE.parent / "paper"
 FIGS = PAPER / "figs"
 for d in (RES, FIGS):
     d.mkdir(parents=True, exist_ok=True)
 
 H = 10              # holding horizon (trading days)
+# Price data is cut off here (exclusive) so results do not change from run to run: downloading
+# "through today" leaked a half-finished trading day into the panel and shifted the numbers.
+DATA_END = pd.Timestamp("2026-09-25")
 K_MATCH = 10        # placebo neighbours per signal
 K_RANDOM = 20       # random draws per signal
 COST = 0.0010       # round-trip transaction cost (10 bps)
@@ -54,6 +57,15 @@ plt.rcParams.update({"font.family": "serif", "font.size": 8, "axes.linewidth": 0
 
 
 # ── data ──────────────────────────────────────────────────────────────────────
+
+def fixed_universe():
+    """S&P 500 constituents on the first day of the study (see paper_universe.py).
+
+    The placebo pool must not depend on which tickers later appeared in the log, so it
+    is this fixed list, in Yahoo Finance symbol style, rather than the log's tickers."""
+    u = pd.read_csv(RES / "sp500_universe.csv")
+    return sorted(u.loc[u.in_universe_at_start, "symbol"])
+
 
 def load_signals():
     con = sqlite3.connect(DB)
@@ -162,9 +174,10 @@ def perf(daily):
 
 def main():
     sig, raw_counts, n_raw = load_signals()
-    P = load_panel(sig["ticker"].unique(), sig["day"].min() - pd.Timedelta(days=140), pd.Timestamp.today())
+    fixed = fixed_universe()
+    P = load_panel(sorted(set(sig["ticker"].unique()) | set(fixed)), sig["day"].min() - pd.Timedelta(days=140), DATA_END)
     dates = P["C"].index
-    universe = [t for t in P["C"].columns if t != "SPY"]
+    universe = [t for t in fixed if t in P["C"].columns and t != "SPY"]
     sig["i"] = dates.searchsorted(sig["day"], side="right") - 1
 
     buys = sig[(sig.decision == "BUY")].copy()

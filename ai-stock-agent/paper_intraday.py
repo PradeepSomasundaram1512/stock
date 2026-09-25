@@ -29,7 +29,7 @@ pa.BLOCK = 1  # cluster by trading day: intraday holdings never overlap across d
 
 
 def load_hourly(tickers, start):
-    cache = pa.RES / "hourly_cache.pkl"
+    cache = pa.RES / "hourly_cache_universe.pkl"
     if cache.exists():
         raw = pd.read_pickle(cache)
     else:
@@ -57,12 +57,13 @@ def main():
     buys["ts"] = pd.to_datetime(buys.recommendation_date, format="mixed").dt.tz_localize("UTC").dt.tz_convert("America/New_York")
     buys = buys[(buys.ts.dt.time >= pd.Timestamp("09:30").time()) & (buys.ts.dt.time < pd.Timestamp("16:00").time())]
 
-    C, Hh, L, F = load_hourly(buys.ticker.unique(), buys.ts.min().normalize() - pd.Timedelta(days=10))
+    fixed = pa.fixed_universe()
+    C, Hh, L, F = load_hourly(sorted(set(buys.ticker.unique()) | set(fixed)), buys.ts.min().normalize() - pd.Timedelta(days=10))
     bars = C.index.as_unit("ns")
     buys["ts"] = buys.ts.dt.as_unit("ns").dt.tz_convert(bars.tz)
     day = bars.normalize()
     udays = np.unique(day)
-    universe = [t for t in C.columns if t != "SPY"]
+    universe = [t for t in fixed if t in C.columns and t != "SPY"]
     picked_day = set(zip(buys.ts.dt.normalize(), buys.ticker))
 
     rows = []

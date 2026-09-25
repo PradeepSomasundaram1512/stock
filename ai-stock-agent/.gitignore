@@ -70,3 +70,9 @@ data/swing_trades.json
 # Keep directory structure
 !data/knowledge_base/.gitkeep
 !data/vector_store/.gitkeep
+
+# Large/regenerable paper artifacts
+paper_results/*.pkl
+paper_results/*_log.txt
+paper_results/ops_*.csv
+paper_results/live_*

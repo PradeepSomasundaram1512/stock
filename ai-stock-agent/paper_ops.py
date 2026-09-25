@@ -37,8 +37,8 @@ import pandas as pd
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 RES = HERE / "paper_results"
-PAPER = ROOT / "paper"
-DB = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "aws-ec2-backup-2026-09-25/data/backtest.db"
+PAPER = HERE.parent / "paper"
+DB = Path(sys.argv[1]) if len(sys.argv) > 1 else PAPER / "data/backtest_ec2_2026-01-06_to_2026-09-24.db"
 LOG = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "aws-ec2-backup-2026-09-25/logs/scanner.log"
 
 TS = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),(\d{3}) - (\w+) - (.*)$")
@@ -122,7 +122,7 @@ def period_robustness():
     import paper_analysis as pa
     ev = pd.read_csv(RES / "analysis_buy_signals.csv")
     sig, _, _ = pa.load_signals()
-    spy = yf.download("SPY", start=sig["day"].min() - pd.Timedelta(days=140), end=pd.Timestamp.today(),
+    spy = yf.download("SPY", start=sig["day"].min() - pd.Timedelta(days=140), end=pa.DATA_END,
                       auto_adjust=True, progress=False)
     dates = spy.dropna().index
     ev["date"] = dates[ev["i"].values]
@@ -203,6 +203,13 @@ def main():
     ops["power"] = power_section()
     ops["period"] = period_robustness()
     ops["audit"] = audit_rationale(real)
+    # how much of the traded universe is actually S&P 500 (the scanner's list is broader)
+    u = pd.read_csv(RES / "sp500_universe.csv")
+    start = set(u.loc[u.in_universe_at_start, "symbol"])
+    logt = {t.replace(".", "-") for (t,) in sqlite3.connect(DB).execute("select distinct ticker from recommendations")}
+    buys_ev = pd.read_csv(RES / "analysis_buy_signals.csv")
+    ops["universe"] = {"index_at_start": len(start), "log_tickers": len(logt), "non_index": len(logt - start),
+                       "buy_share_non_index_pct": float((~buys_ev.ticker.str.replace(".", "-").isin(start)).mean() * 100)}
     json.dump(ops, open(RES / "ops.json", "w"), indent=2, default=float)
 
     f = lambda v, d=1: f"{v:.{d}f}"
@@ -226,6 +233,22 @@ def main():
         m["per" + name + "CI"] = f"[{100 * pr[key]['lo']:+.2f}, {100 * pr[key]['hi']:+.2f}]"
         m["per" + name + "P"] = f"{pr[key]['p']:.3f}" if pr[key]["p"] >= 0.001 else "$<$0.001"
         m["per" + name + "Mde"] = f"{100 * pr[key]['mde']:.2f}"
+    import ast
+    tree = ast.parse((HERE / "ultimate_market_scanner.py").read_text())
+    lit = next(n for n in tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "SP500_ALL"
+               and isinstance(n.value, ast.List))
+    ops["universe"]["scanner_unique"] = len({e.value for e in lit.value.elts})
+    prev = json.load(open(RES / "prev_universe" / "analysis.json"))
+    pv = next(r for r in prev["regimes"] if r["regime"] == "VIX>20")
+    ops["prev_vix_hi"] = {"alpha": pv["alpha"], "lo": pv["lo"], "hi": pv["hi"], "p": pv["p"]}
+    prev_macros = (RES / "prev_universe" / "results_macros.tex").read_text()
+    prev_match_sh = re.search(r"\\newcommand\{\\pMatchSh\}\{([^}]*)\}", prev_macros).group(1)
+    U = ops["universe"]
+    m.update({"prevMatchSh": prev_match_sh})
+    m.update({"nIndexStart": U["index_at_start"], "nLogTick": U["log_tickers"], "nNonIndex": U["non_index"],
+              "nBuyNonIndexPct": f(U["buy_share_non_index_pct"]),
+              "nScannerUniv": U["scanner_unique"], "prevVixHi": f"{100 * ops['prev_vix_hi']['alpha']:+.2f}",
+              "prevVixHiCI": f"[{100 * ops['prev_vix_hi']['lo']:+.2f}, {100 * ops['prev_vix_hi']['hi']:+.2f}]"})
     A = ops["audit"]
     m.update({"auBuys": f"{A['n_buys']:,}", "auTraced": f(A["traced_pct"]), "auOffset": f(A["trace_offset_med_min"]),
               "auStageChanged": f(A["stage3_conf_changed_pct"]), "auCiteOversold": f(A["cite_oversold_pct"]),

@@ -15,3 +15,12 @@ ENV/
 
 # Claude Code stray artifacts
 claude-*-cwd
+
+# LaTeX build artifacts and scratch copies
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.blg
+paper/*.bbl
+paper/*.bak*
+paper/*.pre-*
