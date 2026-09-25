@@ -438,3 +438,14 @@ account admins; it warns but does not stop spending. List it with
 - **iPhone:** open the site in Safari, sign in, then Share > Add to Home Screen. The Home Screen app has separate cookie storage on iOS, so it
   signs in again, and uses a redirect-style Google sign-in: add `<service URL>/auth/google` under *Authorized redirect URIs* of the OAuth client
   (Google Auth Platform > Clients). Browsing in Safari works without that. Regenerate icons with `python dashboard/make_icons.py`.
+
+## Scan universe (S&P 500)
+
+The hand-typed scan list drifted from the index (83 members missing, 49 non-members present), so it is now refreshed weekly:
+`stock-scanner-refresh-universe` (Sunday 08:00 ET, light job, `entrypoint.sh --refresh-universe`) runs `scan_universe.py refresh`. It fetches the
+S&P 500 constituents (Wikipedia's list), validates them (count, symbol shape, table layout, size of change) and rewrites
+`data/scan_universe.json`; **on any doubt it keeps the old file**. Existing tickers keep their position (the quick scan uses the first 100),
+leavers drop out, joiners are appended, and every change is logged to `data/universe_changes.jsonl` and posted to Discord.
+The scanner and `market_snapshot.py` use the refreshed list when it is valid and less than 45 days old, otherwise the list built into
+`ultimate_market_scanner.py`. To scan names beyond the index, list them in `audit/scan_extras.txt` (one per line). Because the universe change alters where
+forward-test signals come from, it is recorded in `paper_results/forward_test_deviations.md`. Tests: `python tests/test_scan_universe.py`.
