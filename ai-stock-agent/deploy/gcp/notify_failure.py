@@ -4,7 +4,7 @@ Posts a Discord message when a scheduled Cloud Run execution fails, so a
 broken run is visible instead of silently missing from the channel.
 
 Usage (from entrypoint.sh):
-    python deploy/gcp/notify_failure.py "<what failed>" <exit code>
+    python deploy/gcp/notify_failure.py "<what failed>" <exit code | -> ["<title>"]
 Never raises: a failing notifier must not mask the original failure.
 """
 import os
@@ -16,6 +16,7 @@ import requests
 def main() -> int:
     what = sys.argv[1] if len(sys.argv) > 1 else "unknown step"
     code = sys.argv[2] if len(sys.argv) > 2 else "?"
+    title = sys.argv[3] if len(sys.argv) > 3 else "🚨 Scheduled job failed"
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook:
         return 0
@@ -30,10 +31,11 @@ def main() -> int:
     )
     body = {
         "embeds": [{
-            "title": "🚨 Scheduled job failed",
+            "title": title,
             "description": (
-                f"**{what}**\nExit code: `{code}` | attempt {int(attempt) + 1}\n"
-                f"Execution: `{execution}`\n[Open logs]({logs})"
+                f"**{what}**\n"
+                + (f"Exit code: `{code}` | attempt {int(attempt) + 1}\n" if code != "-" else "")
+                + f"Execution: `{execution}`\n[Open logs]({logs})"
             ),
             "color": 0xFF3333,
         }]

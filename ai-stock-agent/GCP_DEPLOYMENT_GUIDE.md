@@ -239,7 +239,12 @@ AWS decommission note below) cost far more than the infrastructure.
 **Failure alerts.** Any failed run — the job itself, the state sync/lock, or
 the final upload — posts a Discord message with the exit code, attempt number
 and a link to that execution's logs (`deploy/gcp/notify_failure.py`, called
-from `entrypoint.sh`). Failures inside the container are covered; failures
+from `entrypoint.sh`). A second alert catches what a crash alert cannot: if 10% or more of a run's
+decisions were exception fallbacks (the agent answers HOLD at confidence 0.5
+when the model call fails and the job still exits 0), it posts "LLM fallback
+rate high". This exists because production ran for two months with an
+exhausted OpenAI quota — 71% of all logged decisions were fallbacks — and
+nothing looked broken. Failures inside the container are covered; failures
 before the container runs (image pull, OOM-kill) are not, so still glance at
 `gcloud run jobs executions list` if the channel goes quiet.
 

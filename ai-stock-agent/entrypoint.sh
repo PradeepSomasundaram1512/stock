@@ -31,14 +31,27 @@ if [ $RC -ne 0 ]; then
 fi
 trap 'python deploy/gcp/sync_data.py --release' EXIT
 
+# Output is tee'd so the agent's silent exception fallbacks can be counted afterwards.
+# (Production ran for months with an exhausted OpenAI quota: every call failed, the
+# agent answered HOLD at 0.5 and the job still exited 0, so nothing looked broken.)
+LOGF=$(mktemp)
 if [ "${1:-}" = "--swing-trade" ]; then
     shift
-    python swing_trader.py "$@"
+    python -u swing_trader.py "$@" 2>&1 | tee "$LOGF"
+    STATUS=${PIPESTATUS[0]}
 else
-    python ultimate_market_scanner.py "$@"
+    python -u ultimate_market_scanner.py "$@" 2>&1 | tee "$LOGF"
+    STATUS=${PIPESTATUS[0]}
 fi
-STATUS=$?
 [ $STATUS -ne 0 ] && notify "Job '${JOB}' failed" $STATUS
+
+DEC=$(grep -c "✓ DECISION:" "$LOGF" || true)
+ERR=$(grep -c "Error in autonomous analysis" "$LOGF" || true)
+if [ "${ERR:-0}" -gt 0 ] && [ $((ERR * 10)) -ge "${DEC:-0}" ]; then
+    python deploy/gcp/notify_failure.py \
+        "${ERR} of ${DEC} decisions in '${JOB}' fell back to HOLD at 0.5 because the model call failed (e.g. OpenAI quota exhausted). These are not real LLM decisions." \
+        "-" "⚠️ LLM fallback rate high"
+fi
 
 python deploy/gcp/sync_data.py --upload
 UP=$?
