@@ -10,7 +10,8 @@
 # Discord alert via deploy/gcp/notify_failure.py so it can't go unnoticed.
 #
 # --swing-trade runs swing_trader.py's live paper-trading cycle instead of
-# the default ultimate_market_scanner.py; every other arg (or none) goes to
+# the default ultimate_market_scanner.py; --digest posts the end-of-day health
+# digest (daily_digest.py); every other arg (or none) goes to
 # ultimate_market_scanner.py as before.
 #
 set -uo pipefail
@@ -38,6 +39,10 @@ LOGF=$(mktemp)
 if [ "${1:-}" = "--swing-trade" ]; then
     shift
     python -u swing_trader.py "$@" 2>&1 | tee "$LOGF"
+    STATUS=${PIPESTATUS[0]}
+elif [ "${1:-}" = "--digest" ]; then
+    shift
+    python -u daily_digest.py "$@" 2>&1 | tee "$LOGF"
     STATUS=${PIPESTATUS[0]}
 else
     python -u ultimate_market_scanner.py "$@" 2>&1 | tee "$LOGF"
