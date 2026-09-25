@@ -33,3 +33,16 @@ data is exploratory and must be labelled that way.
 Chronological split at 60% of the distinct BUY dates. The same fixed hypotheses (no re-tuning) are
 evaluated separately on the early and late windows. An effect present only in the early window is
 reported as not persisting.
+
+## Addendum, 2026-09-25 (added after the freeze date, but before any forward outcome could be measured)
+
+No forward signal had matured when this was written; nothing above was changed. What is added:
+
+- **H5, lowest-RSI third.** Among BUY signals, those in the lowest 30% of daily RSI (within the evaluated window) have a *lower*
+  mean 10-day CAR than all BUY signals (two-sided, same bootstrap, same minimum sample). **Origin:** the meta-labeling study
+  (`meta_label.py`) found the lowest-RSI third of BUYs under-performing their matched placebos in the development sample
+  (Holm-adjusted p = 0.05 across 9 tests, the only one to survive at all). H5 was therefore suggested by development data, the
+  development windows are exploratory for it, and only forward data can confirm it.
+- **Input ablation** (`ablation.py outcomes`) is descriptive/exploratory: it reports the 10-day CAR of BUYs that removing an input
+  drops, adds or keeps, and no verdict is drawn below 30 matured candidates.
+- **No meta-model is pre-registered as a trading rule:** none had out-of-sample skill (AUC 0.43 to 0.51, LLM outputs added nothing).
