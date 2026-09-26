@@ -45,10 +45,11 @@ echo "========================================="
 # Shadow model (see shadow.py): a second model answers the same prompt on the same inputs and is
 # only logged. Cheap by construction: GPT-6 Luna ~ $0.0004/decision (~$2/month at ~240 decisions a day)
 # with a hard daily cap. `SHADOW_MODEL= ./deploy/gcp/04_deploy_job.sh` (empty) turns it off;
-# SHADOW_MODEL=gpt-6-sol (~$37/month) or gpt-6-astra (~$190/month) for stronger models.
-SHADOW_MODEL="${SHADOW_MODEL-gpt-6-luna}"
-SHADOW_DAILY_BUDGET_USD="${SHADOW_DAILY_BUDGET_USD:-0.25}"
+# SHADOW_MODEL=gpt-6-sol (~$37/month for every candidate; ~$6-8 with :buys) or gpt-6-astra (~$190/month) for stronger models.
+SHADOW_MODEL="${SHADOW_MODEL-gpt-6-luna,gpt-6-sol:buys}"   # ":buys" = only stocks production called BUY
+SHADOW_DAILY_BUDGET_USD="${SHADOW_DAILY_BUDGET_USD:-0.40}"   # per model
 
+# The ^@^ prefix in --set-env-vars below switches gcloud's list separator to "@", because SHADOW_MODEL contains commas.
 deploy_job() {
     local name="$1" cpu="$2" mem="$3" timeout="$4"
     gcloud run jobs deploy "$name" \
@@ -57,7 +58,7 @@ deploy_job() {
         --service-account="$RUN_SA_EMAIL" \
         --clear-volumes \
         --clear-volume-mounts \
-        --set-env-vars="DATA_BUCKET=${BUCKET_NAME},SHADOW_MODEL=${SHADOW_MODEL},SHADOW_DAILY_BUDGET_USD=${SHADOW_DAILY_BUDGET_USD}" \
+        --set-env-vars="^@^DATA_BUCKET=${BUCKET_NAME}@SHADOW_MODEL=${SHADOW_MODEL}@SHADOW_DAILY_BUDGET_USD=${SHADOW_DAILY_BUDGET_USD}" \
         --set-secrets="$SECRETS" \
         --memory="$mem" \
         --cpu="$cpu" \

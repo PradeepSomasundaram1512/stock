@@ -74,3 +74,25 @@ bias-corrected primary test and fixes its definition here, before any forward ou
   because the window grows. Limitation stated in advance: b depends on the fake-picker pool (50 lowest daily RSI), which only approximates the real pre-screen.
 - H1 to H5 are unchanged. The family for the Holm adjustment becomes H1 to H6.
 - The intraday horizon is not part of the forward test (the deployed intraday result is validated as unbiased and is reported as a development result).
+
+## Addendum 4, 2026-09-26 (still before any forward outcome; adds H7, a secondary test of a stronger model, separate from H1 to H6)
+
+**State of the shadow data when this was written.** The production model's decisions are logged as before. A second model has been answering the same prompts on the same
+stored inputs since 2026-09-25 (`shadow.py`; answers are logged only and never reach alerts, rankings or trades). At the time of writing the table `shadow_decisions`
+held 116 answers from GPT-6 Luna, all from 2026-09-25, none matured, none a BUY, and **no answer from GPT-6 Sol**, which is switched on with this addendum
+(`SHADOW_MODEL=gpt-6-luna,gpt-6-sol:buys`; Sol scores only the candidates production called BUY). No shadow outcome could have been measured.
+
+- **H7 (secondary; does a stronger model sort production's BUYs?).** Among candidates that production called BUY and that Sol answered (llm_status ok), let alpha_i be defined
+  exactly as in H6 (10-day CAR minus the mean CAR of the K = 10 nearest non-selected pool stocks) and let b be the H6 bias term for the same dates. H7: the mean of
+  (alpha_i - b) over those BUYs that Sol also calls BUY **differs from** the mean over those Sol does not call BUY (two-sided; same 10-day-block bootstrap on the difference).
+  Minimum sample: 100 Sol-answered production BUYs matured, in at least 20 independent blocks; below that no verdict is drawn.
+- **Same test for Luna, descriptive.** Luna answers every candidate, so the same comparison is computed for it on the production BUYs it answered, reported as descriptive,
+  with no verdict, so as to keep the family small.
+- **Family.** H7 is its own family of one; the Holm adjustment for H1 to H6 is unchanged. H7 is not part of the paper's six main hypotheses.
+- **What is not claimed.** H7 is about whether Sol adds information *on top of production's BUYs*. It says nothing about whether Sol picks stocks better from the whole universe
+  (it never sees non-BUY candidates), and a null would not show the stronger model is useless, only that it does not sort this slice.
+- **Known limits, stated in advance.** (i) The shadow table records the model name the deployment was configured with (an alias), not a dated snapshot, so a silent model update
+  during the test cannot be detected from the log; the deviation log will note the date of any provider announcement found. (ii) Sol runs under a hard daily budget
+  (USD 0.40 per model) and stops for a scan after three consecutive errors, so on busy days some BUYs may be unanswered; the number answered is reported next to the result.
+  (iii) The analysis code for H7 is not yet written; this addendum fixes its definition, and the code will be added and committed before the minimum sample is reached.
+  (iv) Sol's access to the OpenAI account is unverified at the time of writing; if it never answers, H7 is reported as untestable rather than dropped.

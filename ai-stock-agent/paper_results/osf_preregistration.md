@@ -27,6 +27,11 @@ production system's BUY signals on or after 2026-09-25, scored only once 10 trad
   the right zero is not zero. Stated limitation: b depends on the fake-picker pool, which only approximates the real pre-screen.
 
 
+- H7 (secondary, separate family, addendum 4): among production BUYs that a stronger second model (GPT-6 Sol, scoring only those BUYs, logged but never acted on) also calls BUY,
+  the mean bias-corrected alpha (as H6) differs from that of the BUYs it does not. Minimum 100 answered BUYs in 20 blocks. A same-comparison for GPT-6 Luna is descriptive only.
+  Known limits: model alias not snapshot; daily budget may leave some BUYs unanswered; analysis code to be committed before the minimum sample. At filing, no Sol answer and no
+  matured shadow outcome existed.
+
 ## 3. Analysis
 One row per signal; 95% intervals and p-values from a block bootstrap over non-overlapping 10-trading-day blocks of signal dates (3,000 resamples),
 seeded (`forward_test.py`). "Detectable" means the 95% interval excludes 0. All six hypotheses are reported, together with Holm-adjusted p-values
