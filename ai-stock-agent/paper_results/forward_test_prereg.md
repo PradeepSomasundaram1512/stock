@@ -98,3 +98,5 @@ held 116 answers from GPT-6 Luna, all from 2026-09-25, none matured, none a BUY,
   (iv) Sol's access to the OpenAI account is unverified at the time of writing; if it never answers, H7 is reported as untestable rather than dropped.
 
 **Update, 2026-09-26 (same day, before any outcome):** the H7 analysis code is now written (`forward_test.py`: `shadow_answers`, `h7`; tests in `tests/test_h7.py`) and follows the definition above without change. Limit (iii) therefore no longer applies. Because the bias term b is identical for both groups, it cancels in the H7 difference, so the code computes the difference of alphas directly, which is the same quantity.
+
+**External registration, 2026-09-26:** filed on the Open Science Framework (https://osf.io/qhdgn/, embargoed) before any forward outcome had matured. It contains H1 to H7 as defined above, with H5 stated as two-sided (expected direction lower), which matches how it is tested here.

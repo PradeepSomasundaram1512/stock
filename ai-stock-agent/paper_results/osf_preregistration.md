@@ -8,8 +8,8 @@ freeze itself, and the entry should say so.
 ## 1. Data collection status
 Registration is made after the freeze date (2026-09-25) and after analysis of a development sample (2026-01-09 to 2026-09-10, 1,399 BUY signals).
 No forward signal (dated on or after 2026-09-25) had a measurable 10-trading-day outcome when the hypotheses below were written and committed
-to the project repository (commit history: `ai-stock-agent/paper_results/forward_test_prereg.md`, addenda 1, 2 and 3). H3 and H5 were suggested by
-the development sample, H5 was redefined once (addendum 2), and H6 was added (addendum 3), each before any forward outcome existed; all three facts are disclosed.
+to the project repository (commit history: `ai-stock-agent/paper_results/forward_test_prereg.md`, addenda 1 to 4). H3 and H5 were suggested by
+the development sample, H5 was redefined once (addendum 2), H6 was added (addendum 3) and H7 was added on 2026-09-26 (addendum 4), each before any forward outcome existed; all of these facts are disclosed.
 
 ## 2. Hypotheses (all two-sided)
 Outcome for every hypothesis: the 10-trading-day beta-adjusted cumulative abnormal return (CAR) against SPY, per BUY signal, using the
@@ -26,19 +26,17 @@ production system's BUY signals on or after 2026-09-25, scored only once 10 trad
   the identical placebo). The mean of (alpha_i - b) differs from 0. Rationale (`paper_power.py`): the ten-day placebo is biased by about +0.27 pp for oversold picks, so
   the right zero is not zero. Stated limitation: b depends on the fake-picker pool, which only approximates the real pre-screen.
 
-
 - H7 (secondary, separate family, addendum 4): among production BUYs that a stronger second model (GPT-6 Sol, scoring only those BUYs, logged but never acted on) also calls BUY,
   the mean bias-corrected alpha (as H6) differs from that of the BUYs it does not. Minimum 100 answered BUYs in 20 blocks. A same-comparison for GPT-6 Luna is descriptive only.
-  Known limits: model alias not snapshot; daily budget may leave some BUYs unanswered; analysis code to be committed before the minimum sample. At filing, no Sol answer and no
+  Known limits: model alias not snapshot; daily budget may leave some BUYs unanswered; Sol's account access unverified (if it never answers, H7 is reported as untestable). At filing, no Sol answer and no
   matured shadow outcome existed.
 
 ## 3. Analysis
 One row per signal; 95% intervals and p-values from a block bootstrap over non-overlapping 10-trading-day blocks of signal dates (3,000 resamples),
-seeded (`forward_test.py`). "Detectable" means the 95% interval excludes 0. All six hypotheses are reported, together with Holm-adjusted p-values
-across the six. (A Monte-Carlo check, `paper_power.py`, found this block-bootstrap procedure conservative at the current number of blocks.)
+seeded (`forward_test.py`). "Detectable" means the 95% interval excludes 0. H1 to H6 are reported together with Holm-adjusted p-values across those six; H7 is a separate family of one. (A Monte-Carlo check, `paper_power.py`, found this block-bootstrap procedure conservative at the current number of blocks.)
 
 ## 4. Sample size and stopping rule
-No verdict below 300 matured signals AND 20 independent blocks: below that the report says "insufficient data". At ~12 signals per active day the
+No verdict below 300 matured signals AND 20 independent blocks (H7: 100 answered BUYs AND 20 blocks): below that the report says "insufficient data". At ~12 signals per active day the
 signal count is reached in about 5 weeks and the block count in about 10 months. Data is analysed at fixed checkpoints (weekly, automated), and
 interim results are not used to change the hypotheses, the analysis or the stopping rule.
 
@@ -52,6 +50,6 @@ Exploratory, not confirmatory: the input ablation, meta-labeling, regime splits 
 
 ## 7. How to file (needs an account, which only you can create)
 1. Create a free account at https://osf.io and open Registries > New registration, or use https://aspredicted.org.
-2. Paste sections 1-6 above; attach `forward_test_prereg.md` (with its three addenda) as a supporting file.
+2. Paste sections 1-6 above; attach `forward_test_prereg.md` (with its four addenda) as a supporting file.
 3. Submit, copy the DOI/URL, and add it to the paper's availability paragraph and to `paper_results/forward_test_prereg.md`.
 An external registry timestamps the entry independently of the author's own repository, which is the point.
