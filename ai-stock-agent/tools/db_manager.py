@@ -211,13 +211,14 @@ def save_shadow_decisions(rows: List[Dict[str, Any]]) -> int:
         conn.close()
 
 
-def shadow_spent_today_usd() -> float:
-    """Estimated shadow spend so far today (UTC), summed from what was actually logged."""
+def shadow_spent_today_usd(model: Optional[str] = None) -> float:
+    """Estimated shadow spend so far today (UTC), summed from what was actually logged (one model, or all)."""
     conn = get_connection()
     try:
-        row = conn.execute(
-            "SELECT COALESCE(SUM(est_cost_usd), 0) FROM shadow_decisions WHERE date(decided_at) = date('now')"
-        ).fetchone()
+        sql, args = "SELECT COALESCE(SUM(est_cost_usd), 0) FROM shadow_decisions WHERE date(decided_at) = date('now')", ()
+        if model:
+            sql, args = sql + " AND shadow_model = ?", (model,)
+        row = conn.execute(sql, args).fetchone()
         return float(row[0] or 0.0)
     except Exception as e:
         logger.error(f"shadow_spent_today_usd failed: {e}")

@@ -142,6 +142,8 @@ def write_paper_tex(res: list):
            f"\\newcommand{{\\fwdAllB}}{{{allv['n_blocks']}}}\n"
            f"\\newcommand{{\\fwdMDE}}{{{allv['H3_reversal_minus_universe']['mde'] * 100:.1f}}}\n"
            f"\\newcommand{{\\fwdNeedS}}{{{MIN_SIGNALS}}}\n\\newcommand{{\\fwdNeedB}}{{{MIN_BLOCKS}}}\n"
+           f"\\newcommand{{\\hSixEst}}{{{allv['H6_biascorrected_alpha']['est'] * 100:+.2f}}}\n"
+           f"\\newcommand{{\\hSixCI}}{{[{allv['H6_biascorrected_alpha']['lo'] * 100:+.2f}, {allv['H6_biascorrected_alpha']['hi'] * 100:+.2f}]}}\n"
            "\\newcommand{\\forwardRows}{%\n" + "\n".join(rows) + "}\n")
     (Path(__file__).parent.parent / "paper" / "results_forward.tex").write_text(tex)
 

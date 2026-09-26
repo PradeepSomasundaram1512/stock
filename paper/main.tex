@@ -40,7 +40,7 @@ aadhi1501@gmail.com}}
 \maketitle
 
 \begin{abstract}
-Multi-agent large language model (LLM) trading systems are usually evaluated with historical backtests that fall inside the model's pre-training window and that credit the LLM for returns earned by the surrounding rules. We deploy a seven-node LangGraph agent (GPT-4o-mini, called by alias, with technical, fundamental, news and market-context inputs; a retrieval step is computed but never reaches the prompt) on a universe of U.S. large- and mid-cap equities and log \nRaw{} decisions in real time between January and September 2026, all after the model's knowledge cutoff. We assemble, from standard tools, a \emph{Forward Audit Protocol} (FAP) that separates what the LLM contributes from what the pipeline contributes, and validate it by Monte Carlo on the real price panel: (i) a characteristic-matched placebo drawn from the same pre-screened feature space, (ii) block-bootstrap inference with an explicit minimum detectable effect, (iii) a calibration audit of the confidence the pipeline recorded, (iv) a specification--deployment audit with a counterfactual exit analysis, and (v) an operational audit of the production logs. At the agent's native intraday horizon, stated confidence averaged \iConf{} while only \iHit{}\% of BUY signals beat SPY (calibration gap \iEce{}), and the LLM's abnormal return over its matched placebo was \pct{\iAlpha} per trade (95\% CI \pct{\iAlphaCI}), which rules out any edge above \pct{\mdeUpperIntra}. Over ten days, \nBuy{} BUY signals earned \pct{\mBuyRawten}, fully explained by market exposure: the LLM's abnormal return over its placebo was \pct{\mBuyMinusMatch} (CI \pct{\mBuyMinusMatchCI}), and the design could detect only edges above about \pct{\mdeTen} per ten days. The operational audit shows that \opFallbackPct\% of logged decisions were exception fallbacks caused by an exhausted API quota, so the audited BUYs come from the \opRealPct\% of decisions that reached the model. The Monte-Carlo checks show that the inference is well calibrated (false-positive rates of \powSizeBoot\% at ten days and \ipSizeBoot\% intraday, against a nominal 5\%); the intraday placebo is unbiased (\ipBias{} pp), but the ten-day placebo is biased by \powBias{} pp for oversold picks. The result is a one-model case study with about five usable months, not a general verdict.
+Multi-agent large language model (LLM) trading systems are usually evaluated with backtests that overlap the model's training window and credit the LLM for returns earned by the surrounding rules. We audit a deployed seven-node LangGraph agent (GPT-4o-mini, called by alias) on U.S. large- and mid-cap stocks, using \nRaw{} decisions logged in real time between January and September 2026, all after the model's knowledge cutoff. Our Forward Audit Protocol, assembled from standard tools and validated by Monte Carlo on the real price panel, compares the LLM's picks with characteristic-matched placebos and adds calibration, specification--deployment and operational audits. At the native intraday horizon the LLM's abnormal return over its placebo was \pct{\iAlpha} per trade (95\% CI \pct{\iAlphaCI}), ruling out any edge above \pct{\mdeUpperIntra}; that placebo is unbiased and the inference is well calibrated (false-positive rate \ipSizeBoot\% against a nominal 5\%). Over ten days, \nBuy{} BUY signals earned \pct{\mBuyRawten}, fully explained by market exposure: the alpha over the placebo was \pct{\mBuyMinusMatch} (CI \pct{\mBuyMinusMatchCI}), and \pct{\hSixEst} (CI \hSixCI\%) after removing the ten-day placebo's \powBias{} pp bias for oversold picks. The operational audit found that \opFallbackPct\% of logged decisions were silent exception fallbacks from an exhausted API quota. This is a one-model case study with about five usable months; a pre-registered forward test is running.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -145,7 +145,7 @@ We treat stated confidence $c_i$ as a probability that the trade beats SPY and r
 
 %──────────────────────────────────────────────────────────────────────────────
 \section{Experimental Setup}
-The production log contains \nRaw{} decisions from \dFirst{} to \dLast{}. After de-duplication, \nBuy{} BUY signals on \nTick{} tickers over \nDays{} trading days have complete 10-day forward data (outcomes through \dEvalEnd{}), with \sigPerDay{} signals per active day on average. We also evaluate \iN{} intraday BUY signals on \iDays{} days and \nWS{} WATCH~SELL signals (the LLM said HOLD on names with RSI$>$80), which serve as an overbought reference set. The mean stated confidence of BUYs is \meanConf{}. The scanner's universe is a fixed list of \nScannerUniv{} U.S. large- and mid-cap stocks, broader than the S\&P~500: of the \nLogTick{} tickers in the log, \nNonIndex{} (mid-cap and recently listed names; none is an ETF) were not index members on 2026-01-01, and they account for \nBuyNonIndexPct\% of the evaluated BUY signals. The placebo pool is the fixed list of \nIndexStart{} S\&P~500 constituents on 2026-01-01 (\nUniv{} with complete price data), reconstructed from Wikipedia's constituent list and a public index-change log. Non-members are evaluated as signals but never serve as placebo names. An earlier version of this analysis drew the pool from tickers that appeared in the log, which can peek ahead; Section~\ref{sec:regime} shows that this mattered. Prices are split- and dividend-adjusted daily and 60-minute bars from Yahoo Finance. Over the same window SPY returned \pct{\spyTotal}. Because of the API outage of Section~\ref{sec:ops}, most signals come from April onward (\perFullN{} of \nBuy{}), so the usable window is about five months, not nine.
+The production log contains \nRaw{} decisions from \dFirst{} to \dLast{}. After de-duplication, \nBuy{} BUY signals on \nTick{} tickers over \nDays{} trading days have complete 10-day forward data (outcomes through \dEvalEnd{}), with \sigPerDay{} signals per active day on average. We also evaluate \iN{} intraday BUY signals on \iDays{} days and \nWS{} WATCH~SELL signals (the LLM said HOLD on names with RSI$>$80), which serve as an overbought reference set. The mean stated confidence of BUYs is \meanConf{}. The scanner's universe is a fixed list of \nScannerUniv{} U.S. large- and mid-cap stocks, broader than the S\&P~500: of the \nLogTick{} tickers in the log, \nNonIndex{} (mid-cap and recently listed names; none is an ETF) were not index members on 2026-01-01, and they account for \nBuyNonIndexPct\% of the evaluated BUY signals. The placebo pool is the fixed list of \nIndexStart{} S\&P~500 constituents on 2026-01-01 (\nUniv{} with complete price data), reconstructed from Wikipedia's constituent list and a public index-change log. Non-members are evaluated as signals but never serve as placebo names. An earlier version of this analysis drew the pool from tickers that appeared in the log, which can peek ahead; Appendix~\ref{sec:regime} shows that this mattered. Prices are split- and dividend-adjusted daily and 60-minute bars from Yahoo Finance. Over the same window SPY returned \pct{\spyTotal}. Because of the API outage of Section~\ref{sec:ops}, most signals come from April onward (\perFullN{} of \nBuy{}), so the usable window is about five months, not nine.
 
 \textbf{What is audited.} A BUY in the log is the LLM's decision after the Stage-3 gates: Stage~3 changed the stated confidence of \auStageChanged\% of BUYs, and HOLD decisions were almost never stored (67 of \nRaw{} rows), so the candidates the LLM saw and rejected are not available. FAP therefore measures the value added by \emph{the LLM plus its gates} against a placebo built from daily (multi-day) or pre-screen (intraday) features, which approximates but is not identical to the pre-screen's candidate set. Lineage checks out: \auTraced\% of the \auBuys{} database BUYs match a same-ticker LLM BUY in the production log, a median of \auOffset{} minutes earlier.
 
@@ -289,7 +289,7 @@ Placebo design & LLM & No-skill & LLM $-$ bias & Worse than \\
 \end{table}
 
 \subsection{Consistency over time and a pre-registered forward test}
-Splitting the signal dates at 60\% (\fwdEarlyN{} signals in \fwdEarlyB{} independent ten-day blocks, then \fwdLateN{} in \fwdLateB{}) and evaluating six fixed hypotheses in each window (Table~\ref{tab:forward}) finds no detectable effect in either. The lowest-RSI rule's advantage over the universe is positive in both windows, yet its interval always spans zero; confidence gating and confidence ranking are null in both. Because signals cluster in time, the effective sample is the number of independent blocks (\fwdAllB{}), so the smallest detectable difference between rules is about \fwdMDE{} percentage points. The lowest-RSI hypothesis (H3) and H5 were suggested by development results, so these windows are exploratory for them; only forward data can confirm either. H6 is the primary test of selection skill: the ten-day alpha over the placebo minus the placebo's measured bias (Section~\ref{sec:valid}), with the bias estimated from seeded no-skill fake pickers on the same dates and the whole procedure fixed before any forward outcome existed. We therefore froze the six hypotheses, thresholds and a minimum sample (\fwdNeedS{} matured signals and \fwdNeedB{} independent blocks) in a committed pre-registration on 2026-09-25, before any outcome of the forward window existed. Below that sample the test reports ``insufficient data'' rather than findings. \fwdStatusText{} Two further exploratory analyses, a purged walk-forward meta-model and an input ablation, are in Appendices~\ref{app:meta} and~\ref{sec:abl}; neither changes the conclusion.
+Splitting the signal dates at 60\% (\fwdEarlyN{} signals in \fwdEarlyB{} independent ten-day blocks, then \fwdLateN{} in \fwdLateB{}) and evaluating six fixed hypotheses in each window (Table~\ref{tab:forward}) finds no detectable effect in either. The lowest-RSI rule's advantage over the universe is positive in both windows, yet its interval always spans zero; confidence gating and confidence ranking are null in both. Because signals cluster in time, the effective sample is the number of independent blocks (\fwdAllB{}), so the smallest detectable difference between rules is about \fwdMDE{} percentage points. The lowest-RSI hypothesis (H3) and H5 were suggested by development results, so these windows are exploratory for them; only forward data can confirm either. H6 is the primary test of selection skill: the ten-day alpha over the placebo minus the placebo's measured bias (Section~\ref{sec:valid}), with the bias estimated from seeded no-skill fake pickers on the same dates and the whole procedure fixed before any forward outcome existed. We therefore froze the six hypotheses, thresholds and a minimum sample (\fwdNeedS{} matured signals and \fwdNeedB{} independent blocks) in a committed pre-registration on 2026-09-25, before any outcome of the forward window existed. Below that sample the test reports ``insufficient data'' rather than findings. \fwdStatusText{} Four further exploratory analyses, a purged walk-forward meta-model, an input ablation, a portfolio simulation and a regime split, are in Appendices~\ref{app:meta}--\ref{sec:regime}; none changes the conclusion.
 
 \fwdStatusTable
 
@@ -359,34 +359,6 @@ Confidence bin & $N$ & $\bar c$ & P(beat SPY) & P(target 1st) & $\Delta$ (\%) \\
 \label{fig:calib}
 \end{figure}
 
-\subsection{Portfolio view}
-Table~\ref{tab:port} and Fig.~\ref{fig:equity} simulate a signal-weighted portfolio that holds each BUY for ten days, with the placebo and a mechanical ``daily RSI$<$25'' rule built the same way. This simulation lets same-ticker signals stack and imposes no capital constraint, so we report it as context rather than evidence. The LLM portfolio's Sharpe ratio exceeds SPY's (\pLlmSh{} vs.\ \pSpySh{}), but its beta is \pLlmBeta{} and its HAC alpha is not significant ($t{=}\pLlmAlphaT$). The long LLM / short placebo spread earned \pct{\pLSTot} ($t{=}\pLSAlphaT$). The portfolio weights days equally, whereas Table~\ref{tab:main} weights signals equally, so busy days count less here. The gap between the two views is itself a warning: a headline Sharpe ratio over nine months is well within the range that selection and multiple testing can produce~\cite{bailey2014deflated,harvey2016cross}.
-
-\begin{table}[t]
-\centering
-\caption{Portfolio simulation, \dFirst{} to \dEvalEnd{} (10 bps costs)}
-\label{tab:port}
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lrrrrrr@{}}
-\toprule
-Strategy & Ret.\% & Vol.\% & Sharpe & MDD\% & $\alpha$\%/yr ($t$) & $\beta$ \\
-\midrule
-LLM agent & $\pLlmTot$ & \pLlmVol & \pLlmSh & $\pLlmMdd$ & $\pLlmAlpha$ (\pLlmAlphaT) & \pLlmBeta \\
-Matched placebo & $\pMatchTot$ & \pMatchVol & \pMatchSh & $\pMatchMdd$ & $\pMatchAlpha$ (\pMatchAlphaT) & \pMatchBeta \\
-RSI$<$25 rule & $\pRuleTot$ & \pRuleVol & \pRuleSh & $\pRuleMdd$ & $\pRuleAlpha$ (\pRuleAlphaT) & \pRuleBeta \\
-SPY & $\pSpyTot$ & \pSpyVol & \pSpySh & $\pSpyMdd$ & -- & \pSpyBeta \\
-LLM $-$ placebo & $\pLSTot$ & \pLSVol & \pLSSh & $\pLSMdd$ & $\pLSAlpha$ (\pLSAlphaT) & -- \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figs/equity.pdf}
-\caption{Cumulative return of signal-weighted 10-day portfolios and SPY.}
-\label{fig:equity}
-\end{figure}
-
 \subsection{Operational audit of the production log}
 \label{sec:ops}
 The production log covers \opScans{} hourly scans (median duration \opScanMedMin{} minutes, about \opSelMed{} candidates per scan) and contains \opDecisions{} decisions. Only \opReal{} (\opRealPct\%) came from the model. The other \opFallback{} are the agent's exception fallback: \opQuota{} were caused by an exhausted OpenAI quota (``You exceeded your current quota'') on \opQuotaDays{} distinct days between \opQuotaFirst{} and \opQuotaLast{}, and only \opJsonErr{} by unparsable model output. Real decisions plus fallbacks reconcile with the number of decision lines in the log. Table~\ref{tab:ops} shows that the outage covers almost all of February, which is why the database holds no February signals, and most of March; from April every decision reached the model. The API returned \opHttpLimited{} HTTP~429 responses (including automatic retries) against \opHttpOk{} successful chat completions. For decisions that reached the model, the median time from the start of a ticker's analysis to its decision was \opLatMed{} s (95th percentile \opLatPtf{} s) with five parallel workers.
@@ -408,27 +380,8 @@ Signals from the outage rest on the few candidates that did reach the model, so 
 
 \textbf{What the model said.} Stored rationales are the model's key factors. \auCiteOversold\% of BUYs cite ``RSI is oversold'' (median stored RSI of BUYs: \auMedRsi), none of those contradict the stored RSI, and the three most common factor strings account for \auTopShare\% of all cited factors among \auDistinct{} distinct strings. The model's choice is largely a restatement of the pre-screen's oversold flag, which is consistent with the null selection result. The database stopped storing news and fundamentals scores after January, so we cannot audit whether those inputs influenced decisions; logging them is the first change we recommend.
 
-\subsection{Exploratory regime analysis}
-\label{sec:regime}
-Table~\ref{tab:regime} splits $\Delta$ by VIX on the signal date and by SPY trend. Only one estimate is nominally significant: the LLM trailed its placebo when VIX was below 16 (it also survives a Holm correction across the five tests, though these bootstrap $p$-values rest on few independent blocks). The positive estimate for VIX above 20 is not distinguishable from zero. It is also the estimate that moved most when we fixed the placebo pool: with a pool drawn from tickers that appeared in the log, the same split gave \prevVixHi\% (CI \prevVixHiCI), which looked like value under elevated volatility and would have been a headline. Fixing the pool to the constituents on the first study day removed it, a concrete illustration of how sensitive regime splits are to the placebo universe. Because the splits are post hoc and the high-VIX sample covers only a few episodes, the table should be read descriptively, and this result is kept out of the abstract.
-
-\begin{table}[t]
-\centering
-\caption{LLM value-added by market regime (10 days, \%)}
-\label{tab:regime}
-\setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{@{}lrrrcr@{}}
-\toprule
-Regime & $N$ & CAR & $\Delta$ & 95\% CI & $p$ \\
-\midrule
-\regimeRows
-\bottomrule
-\end{tabular}
-\end{table}
-
-%──────────────────────────────────────────────────────────────────────────────
 \section{Discussion}
-\textbf{Lessons for AI engineering.} (1) \emph{Attribute before you celebrate.} The agent's portfolio beat SPY on Sharpe (\pLlmSh{} vs.\ \pSpySh{}) and its placebo (\pMatchSh{}), yet neither its alpha ($t{=}\pLlmAlphaT$) nor its long--short spread over the placebo ($t{=}\pLSAlphaT$) is distinguishable from zero, and the placebo's own Sharpe moved from \prevMatchSh{} to \pMatchSh{} when the pool was fixed. P\&L is a property of the whole pipeline, and the LLM's contribution must be measured against a counterfactual that removes only the LLM's choice. (2) \emph{Specification drift is a first-class failure mode.} A single wrong flag sent the intraday prompt into production for a swing strategy. Every component then behaved ``correctly'' in isolation while a counterfactual replay shows it would have lost \pct{\depGap} per trade on the intended horizon. Consistency checks between prompt horizon, feature timeframe, exit rules and evaluation horizon belong in the test suite. (3) \emph{Do not gate on the recorded confidence} unless it has been calibrated on forward data, and log the model's raw confidence separately from the gated one. (4) \emph{Log the failure path.} Seven in ten decisions came from a silent exception fallback that emitted a plausible-looking HOLD; fallbacks need their own label, counter and alert.
+\textbf{Lessons for AI engineering.} (1) \emph{Attribute before you celebrate.} The agent's portfolio (Appendix~\ref{app:port}) beat SPY on Sharpe (\pLlmSh{} vs.\ \pSpySh{}) and its placebo (\pMatchSh{}), yet neither its alpha ($t{=}\pLlmAlphaT$) nor its long--short spread over the placebo ($t{=}\pLSAlphaT$) is distinguishable from zero, and the placebo's own Sharpe moved from \prevMatchSh{} to \pMatchSh{} when the pool was fixed. P\&L is a property of the whole pipeline, and the LLM's contribution must be measured against a counterfactual that removes only the LLM's choice. (2) \emph{Specification drift is a first-class failure mode.} A single wrong flag sent the intraday prompt into production for a swing strategy. Every component then behaved ``correctly'' in isolation while a counterfactual replay shows it would have lost \pct{\depGap} per trade on the intended horizon. Consistency checks between prompt horizon, feature timeframe, exit rules and evaluation horizon belong in the test suite. (3) \emph{Do not gate on the recorded confidence} unless it has been calibrated on forward data, and log the model's raw confidence separately from the gated one. (4) \emph{Log the failure path.} Seven in ten decisions came from a silent exception fallback that emitted a plausible-looking HOLD; fallbacks need their own label, counter and alert.
 
 \textbf{Threats to validity.} The sample spans nine months, \nDays{} signal days and a single model (GPT-4o-mini), so power is limited (Table~\ref{tab:power}); a 2024-vintage model says nothing about frontier models. The model was called by the alias gpt-4o-mini and the snapshot served during the study was not logged (the system now logs it; on 2026-09-25 the alias resolved to gpt-4o-mini-2024-07-18), so a silent snapshot change cannot be excluded. Decisions come from a stochastic process (temperature 0.3): in a pilot replay of 38 candidates two identical runs disagreed on 6.6\% of decisions, and every result here is one realisation of it. The matched placebo is biased for oversold picks (Section~\ref{sec:valid}), and the pre-registration, though committed to the project repository, carries only the author's own timestamps. The February gap is not random downtime but the quota outage of Table~\ref{tab:ops}, and signals from that period rest on the small share of candidates that reached the model. The placebo pool is a fixed list of index constituents reconstructed from two public web sources that we did not independently audit, and it excludes the \nNonIndex{} non-index tickers the scanner also traded, so matching is among index names only. After the study period the scan list was aligned to the current index (2026-09-25), so forward results come from a slightly different set of stocks; that change is logged with the pre-registration. Stage-3 gates edit the LLM's output, HOLDs were not stored, and the multi-day placebo uses daily rather than pre-screen features, so the audit measures the LLM plus its gates against an approximation of its candidate set. The ten-day exit analysis is a counterfactual, since no position was held ten days. We assume 10~bps costs, no market impact and error-free Yahoo Finance bars; token counts and per-decision API cost were not logged. FAP does not prove that LLM agents cannot add value, only that this agent did not do so measurably.
 
@@ -437,7 +390,7 @@ Regime & $N$ & CAR & $\Delta$ & 95\% CI & $p$ \\
 We ran a multi-agent LLM trading system in production after the model's knowledge cutoff and audited its \nRaw{} logged decisions with the Forward Audit Protocol. The LLM's stock selection added no statistically detectable return over characteristic-matched alternatives at any horizon (minimum detectable effects in Table~\ref{tab:power}). A counterfactual replay shows that the deployed intraday stop levels would have turned the captured market drift into a flat result, the pipeline's recorded confidence was uninformative, and \opFallbackPct\% of the logged decisions were quota-exhaustion fallbacks. FAP (contamination-free logging, matched placebos, block-bootstrap inference with stated power, consistency, calibration and operational audits) is cheap to adopt, but it has been validated on one system only and its placebo needs a bias correction for extreme picks. We offer it as a starting point for auditing LLM agents, not as a settled standard. A purged walk-forward meta-model found no predictor of which calls work, and an input ablation showed that only the technical block moves decisions beyond the model's own randomness. A pre-registered forward test (six fixed hypotheses; minimum sample of \fwdNeedS{} signals in \fwdNeedB{} independent blocks) is running and will be reported once it matures. Future work will compare frontier models under the same protocol and re-test regime effects out of sample.
 
 \section*{Data and Code Availability}
-The production decision log (model rationales included, news text excluded), the frozen price panel behind every number, the scripts that generate each table and macro in this paper, the pre-registration and its addenda, and the deployment code are in the project repository (github.com/PradeepSomasundaram1512/stock, directories ai-stock-agent and paper). Two runs of the analysis pipeline are byte-identical. The pre-registration carries the repository's commit timestamps only.
+The code, the tests, the pre-registration and its addenda, the scripts that generate every table and macro in this paper, the analysis outputs and the decision log analysed here (model rationales included, news text excluded) are in a public release of the project (repository URL and archive DOI to be added at submission). Raw Yahoo Finance price data are not redistributed because of the provider's terms: the scripts re-download them, and a re-download can shift secondary numbers slightly (the portfolio-rule row moved by up to 0.3 percentage points between downloads, while headline statistics agree to about eight decimals). The pre-registration carries the repository's commit timestamps only.
 
 
 \appendices
@@ -476,6 +429,55 @@ Variant & Agreement & BUY rate & To / from BUY \\
 \end{tabular}
 \end{table}
 
+
+\section{Portfolio view}\label{app:port}
+Table~\ref{tab:port} and Fig.~\ref{fig:equity} simulate a signal-weighted portfolio that holds each BUY for ten days, with the placebo and a mechanical ``daily RSI$<$25'' rule built the same way. This simulation lets same-ticker signals stack and imposes no capital constraint, so we report it as context rather than evidence. The LLM portfolio's Sharpe ratio exceeds SPY's (\pLlmSh{} vs.\ \pSpySh{}), but its beta is \pLlmBeta{} and its HAC alpha is not significant ($t{=}\pLlmAlphaT$). The long LLM / short placebo spread earned \pct{\pLSTot} ($t{=}\pLSAlphaT$). The portfolio weights days equally, whereas Table~\ref{tab:main} weights signals equally, so busy days count less here. The gap between the two views is itself a warning: a headline Sharpe ratio over nine months is well within the range that selection and multiple testing can produce~\cite{bailey2014deflated,harvey2016cross}.
+
+\begin{table}[t]
+\centering
+\caption{Portfolio simulation, \dFirst{} to \dEvalEnd{} (10 bps costs)}
+\label{tab:port}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Strategy & Ret.\% & Vol.\% & Sharpe & MDD\% & $\alpha$\%/yr ($t$) & $\beta$ \\
+\midrule
+LLM agent & $\pLlmTot$ & \pLlmVol & \pLlmSh & $\pLlmMdd$ & $\pLlmAlpha$ (\pLlmAlphaT) & \pLlmBeta \\
+Matched placebo & $\pMatchTot$ & \pMatchVol & \pMatchSh & $\pMatchMdd$ & $\pMatchAlpha$ (\pMatchAlphaT) & \pMatchBeta \\
+RSI$<$25 rule & $\pRuleTot$ & \pRuleVol & \pRuleSh & $\pRuleMdd$ & $\pRuleAlpha$ (\pRuleAlphaT) & \pRuleBeta \\
+SPY & $\pSpyTot$ & \pSpyVol & \pSpySh & $\pSpyMdd$ & -- & \pSpyBeta \\
+LLM $-$ placebo & $\pLSTot$ & \pLSVol & \pLSSh & $\pLSMdd$ & $\pLSAlpha$ (\pLSAlphaT) & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figs/equity.pdf}
+\caption{Cumulative return of signal-weighted 10-day portfolios and SPY.}
+\label{fig:equity}
+\end{figure}
+
+
+\section{Exploratory regime analysis}
+\label{sec:regime}
+Table~\ref{tab:regime} splits $\Delta$ by VIX on the signal date and by SPY trend. Only one estimate is nominally significant: the LLM trailed its placebo when VIX was below 16 (it also survives a Holm correction across the five tests, though these bootstrap $p$-values rest on few independent blocks). The positive estimate for VIX above 20 is not distinguishable from zero. It is also the estimate that moved most when we fixed the placebo pool: with a pool drawn from tickers that appeared in the log, the same split gave \prevVixHi\% (CI \prevVixHiCI), which looked like value under elevated volatility and would have been a headline. Fixing the pool to the constituents on the first study day removed it, a concrete illustration of how sensitive regime splits are to the placebo universe. Because the splits are post hoc and the high-VIX sample covers only a few episodes, the table should be read descriptively, and this result is kept out of the abstract.
+
+\begin{table}[t]
+\centering
+\caption{LLM value-added by market regime (10 days, \%)}
+\label{tab:regime}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrcr@{}}
+\toprule
+Regime & $N$ & CAR & $\Delta$ & 95\% CI & $p$ \\
+\midrule
+\regimeRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+%──────────────────────────────────────────────────────────────────────────────
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

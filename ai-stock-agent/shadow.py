@@ -20,6 +20,9 @@ unable to hurt production and to stay cheap:
 
 Config (env):  SHADOW_MODEL  SHADOW_DAILY_BUDGET_USD  SHADOW_PRICE_IN  SHADOW_PRICE_OUT
                (USD per 1M tokens; the last two override the built-in price table)
+
+SHADOW_MODEL takes one or several models, comma separated. "name:buys" restricts that model to the candidates production called BUY (about 10x
+cheaper, and it is the only slice a forward test scores), e.g.  SHADOW_MODEL="gpt-6-luna,gpt-6-sol:buys". The daily budget applies to each model separately.
 """
 
 import json
@@ -45,22 +48,25 @@ MAX_CONSECUTIVE_ERRORS = 3
 WORKERS = 4
 EST_TOKENS_IN, EST_TOKENS_OUT = 1300, 500   # measured: ~1,296 in / ~450 out incl. hidden reasoning
 
-_agent = None
+_agents: Dict[str, Any] = {}
 
 
-def _config() -> Optional[Dict[str, Any]]:
-    """None when disabled or unusable; never raises."""
-    model = os.getenv("SHADOW_MODEL", "").strip()
-    if not model:
-        return None
-    try:
-        price_in = float(os.getenv("SHADOW_PRICE_IN") or PRICES[model][0])
-        price_out = float(os.getenv("SHADOW_PRICE_OUT") or PRICES[model][1])
-        budget = float(os.getenv("SHADOW_DAILY_BUDGET_USD") or DEFAULT_BUDGET_USD)
-    except (KeyError, ValueError):
-        logger.warning(f"Shadow disabled: no known price for '{model}' (set SHADOW_PRICE_IN/OUT) or bad budget")
-        return None
-    return {"model": model, "price_in": price_in, "price_out": price_out, "budget": budget}
+def _configs() -> List[Dict[str, Any]]:
+    """One config per usable model in SHADOW_MODEL; empty when disabled. Never raises."""
+    out = []
+    for part in os.getenv("SHADOW_MODEL", "").split(","):
+        model, _, flag = part.strip().partition(":")
+        if not model:
+            continue
+        try:
+            price_in = float(os.getenv("SHADOW_PRICE_IN") or PRICES[model][0])
+            price_out = float(os.getenv("SHADOW_PRICE_OUT") or PRICES[model][1])
+            budget = float(os.getenv("SHADOW_DAILY_BUDGET_USD") or DEFAULT_BUDGET_USD)
+        except (KeyError, ValueError):
+            logger.warning(f"Shadow model '{model}' skipped: no known price (set SHADOW_PRICE_IN/OUT) or bad budget")
+            continue
+        out.append({"model": model, "price_in": price_in, "price_out": price_out, "budget": budget, "buys_only": flag == "buys"})
+    return out
 
 
 def _cost(cfg: Dict[str, Any], tokens_in: Optional[int], tokens_out: Optional[int]) -> float:
@@ -70,12 +76,11 @@ def _cost(cfg: Dict[str, Any], tokens_in: Optional[int], tokens_out: Optional[in
 
 
 def _get_agent(model: str):
-    global _agent
-    if _agent is None:
+    if model not in _agents:
         from agents.autonomous_reasoning_agent import AutonomousReasoningAgent
         # temperature=None: the GPT-6 family rejects any non-default value
-        _agent = AutonomousReasoningAgent(model_type="openai", model_name=model, temperature=None)
-    return _agent
+        _agents[model] = AutonomousReasoningAgent(model_type="openai", model_name=model, temperature=None)
+    return _agents[model]
 
 
 def _one(agent, r: Dict[str, Any]) -> Dict[str, Any]:
@@ -98,20 +103,32 @@ def run_shadow(scan: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _run(scan: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    cfg = _config()
-    if not cfg:
+    cfgs = _configs()
+    if not cfgs:
         return {"status": "disabled"}
-    results = [r for r in ((scan or {}).get("results") or []) if r and r.get("ticker")]
-    if not results:
+    all_results = [r for r in ((scan or {}).get("results") or []) if r and r.get("ticker")]
+    if not all_results:
         return {"status": "no_candidates"}
 
-    n_fail = sum(1 for r in results if (r.get("decision") or {}).get("llm_status") == "fallback_error")
-    if n_fail / len(results) >= UNHEALTHY_FALLBACK_SHARE:
-        logger.warning(f"Shadow skipped: {n_fail}/{len(results)} production calls failed this scan")
+    n_fail = sum(1 for r in all_results if (r.get("decision") or {}).get("llm_status") == "fallback_error")
+    if n_fail / len(all_results) >= UNHEALTHY_FALLBACK_SHARE:
+        logger.warning(f"Shadow skipped: {n_fail}/{len(all_results)} production calls failed this scan")
         return {"status": "skipped_primary_unhealthy"}
 
+    statuses = {}
+    for cfg in cfgs:      # each model is isolated: one failing or over budget never stops the others
+        try:
+            results = [r for r in all_results if (r.get("decision") or {}).get("decision") == "BUY"] if cfg["buys_only"] else all_results
+            statuses[cfg["model"]] = _run_model(scan, cfg, results) if results else {"status": "no_candidates"}
+        except Exception as e:
+            logger.warning(f"Shadow model {cfg['model']} failed (ignored): {e}")
+            statuses[cfg["model"]] = {"status": "error", "error": str(e)}
+    return statuses[cfgs[0]["model"]] if len(cfgs) == 1 else {"status": "ok", "models": statuses}
+
+
+def _run_model(scan: Dict[str, Any], cfg: Dict[str, Any], results: List[Dict[str, Any]]) -> Dict[str, Any]:
     from tools.db_manager import save_shadow_decisions, shadow_spent_today_usd
-    spent = shadow_spent_today_usd()
+    spent = shadow_spent_today_usd(cfg["model"])
     remaining = cfg["budget"] - spent
     per_call = _cost(cfg, None, None)
     if remaining < per_call:

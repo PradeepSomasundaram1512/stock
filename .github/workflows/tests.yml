@@ -34,6 +34,8 @@ jobs:
         run: python tests/test_scan_universe.py
       - name: Daily-digest system-check tests
         run: python tests/test_digest_checks.py
+      - name: Multi-model shadow tests
+        run: python tests/test_shadow_multi.py
       - name: Input-log tests
         run: python tests/test_input_log.py
       - name: Ablation tests
