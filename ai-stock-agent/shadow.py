@@ -30,7 +30,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,11 @@ WORKERS = 4
 EST_TOKENS_IN, EST_TOKENS_OUT = 1300, 500   # measured: ~1,296 in / ~450 out incl. hidden reasoning
 
 _agents: Dict[str, Any] = {}
+
+
+def _utcnow_iso() -> str:
+    """Naive UTC timestamp, the same format datetime.utcnow() gave (the daily-budget query and the H7 day matching read it)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
 def _configs() -> List[Dict[str, Any]]:
@@ -143,7 +148,7 @@ def _run_model(scan: Dict[str, Any], cfg: Dict[str, Any], results: List[Dict[str
     def to_row(r, d):
         cost = _cost(cfg, d.get("tokens_in"), d.get("tokens_out")) if d.get("llm_status") == "ok" else 0.0
         return {
-            "scan_id": scan_id, "decided_at": datetime.utcnow().isoformat(), "ticker": r["ticker"],
+            "scan_id": scan_id, "decided_at": _utcnow_iso(), "ticker": r["ticker"],
             "shadow_model": cfg["model"], "llm_status": d.get("llm_status", "unknown"),
             "latency_s": d.get("latency_s"), "error": d.get("error"), "decision": d.get("decision"),
             "confidence": d.get("confidence"), "price_target": d.get("price_target"), "stop_loss": d.get("stop_loss"),
