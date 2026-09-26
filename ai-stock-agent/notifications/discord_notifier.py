@@ -6,7 +6,7 @@ Sends stock alerts via Discord webhooks (100% FREE!)
 import os
 import logging
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # Top BUY opportunities
@@ -163,7 +163,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         if entry_price and profit_pct is not None:
@@ -221,7 +221,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return self.send_discord(embed=embed)
@@ -258,7 +258,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return self.send_discord(embed=embed)
@@ -298,7 +298,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         if best_performer:
@@ -359,7 +359,7 @@ class DiscordNotifier:
             "footer": {
                 "text": "AI Stock Decision Agent"
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return self.send_discord(embed=embed)

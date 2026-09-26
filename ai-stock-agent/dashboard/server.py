@@ -370,7 +370,7 @@ def context(q=None) -> dict:
                     "order by recommendation_date desc limit 1").fetchone()
     out["trend"] = r[0] if r else None
     # model spend: shadow cost is logged; production cost is estimated from logged tokens
-    month = (last or datetime.utcnow().isoformat())[:7]
+    month = (last or datetime.now(timezone.utc).replace(tzinfo=None).isoformat())[:7]
     day = (last or "")[:10]
     prod = lambda like: sum(
         (ti or 0) * MODEL_PRICES.get(m, (0.15, 0.60))[0] / 1e6 + (to or 0) * MODEL_PRICES.get(m, (0.15, 0.60))[1] / 1e6

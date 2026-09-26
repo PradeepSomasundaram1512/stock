@@ -131,7 +131,7 @@ def chain_update() -> tuple:
 
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    day = args[0] if args else datetime.utcnow().strftime("%Y-%m-%d")
+    day = args[0] if args else datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d")
     text, status = render(summarize(day))
     if "--print" not in sys.argv:
         line, problem = chain_update()

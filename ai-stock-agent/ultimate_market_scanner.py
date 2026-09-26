@@ -36,7 +36,7 @@ import threading
 import requests
 import concurrent.futures
 from pathlib import Path
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timezone
 from typing import List, Dict, Any, Tuple, Optional
 import pytz
 import yfinance as yf
@@ -228,7 +228,7 @@ def send_discord_alert(title: str, message: str, color: int = 0x00FF00, webhook_
             "title": title,
             "description": message,
             "color": color,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "footer": {
                 "text": "Ultimate Market Scanner"
             }
@@ -1124,7 +1124,7 @@ def _decision_rows(results: List[Dict[str, Any]], prescreen_lookup: Dict, scan_i
         except (TypeError, ValueError):
             return None
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     rows = []
     for r in results:
         d = r.get('decision') or {}
@@ -1259,7 +1259,7 @@ def scan_market(stock_list: List[str], quick: bool = False, max_stocks: int = No
         else:
             errors += 1
 
-    scan_id = datetime.utcnow().replace(microsecond=0).isoformat()
+    scan_id = datetime.now(timezone.utc).replace(tzinfo=None).replace(microsecond=0).isoformat()
     try:
         from tools.db_manager import save_llm_decisions
         n_logged = save_llm_decisions(_decision_rows(results, prescreen_lookup, scan_id))

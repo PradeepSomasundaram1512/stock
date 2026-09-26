@@ -20,7 +20,7 @@ import os
 import sys
 import time
 import argparse
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -330,7 +330,7 @@ class SwingTradingEngine:
                 "description": description,
                 "color": color,
                 "footer": {"text": "Swing Trader • Paper Account"},
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
             }]
         }
         try:
