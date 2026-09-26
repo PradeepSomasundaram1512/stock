@@ -77,13 +77,55 @@ def boot(df: pd.DataFrame, stat):
             "se": float(se), "mde": float(2.8 * se), "p": float(p), "detectable": bool(np.percentile(draws, 2.5) > 0 or np.percentile(draws, 97.5) < 0)}
 
 
-def analyse(df: pd.DataFrame, label: str, days: list = None) -> dict:
+H7_MIN_SIGNALS, H7_MIN_BLOCKS = 100, 20     # addendum 4
+
+
+def shadow_answers(db: str, model: str) -> pd.DataFrame:
+    """One row per (day, ticker): the shadow model's FIRST successful answer that day (UTC date of the call). Empty if the table or model is absent.
+    Production's signal is the first BUY of the ticker that day (audit_core.load_signals); a shadow model that only scores production BUYs answers that same
+    scan unless its daily budget ran out, in which case a later BUY is scored: disclosed as a limit in addendum 4."""
+    import sqlite3
+    try:
+        con = sqlite3.connect(db)
+        d = pd.read_sql("select ticker, decided_at, decision from shadow_decisions where shadow_model = ? and llm_status = 'ok' and decision is not null",
+                        con, params=(model,))
+    except Exception:            # noqa: BLE001 - no shadow table yet
+        return pd.DataFrame(columns=["day", "ticker", "s_decision"])
+    if d.empty:
+        return pd.DataFrame(columns=["day", "ticker", "s_decision"])
+    d["day"] = d.decided_at.str[:10]
+    d = d.sort_values("decided_at").drop_duplicates(["day", "ticker"])
+    return d.rename(columns={"decision": "s_decision"})[["day", "ticker", "s_decision"]]
+
+
+def h7(df: pd.DataFrame, ans: pd.DataFrame, model: str, verdict: bool = True) -> dict:
+    """H7 (addendum 4): among production BUYs the shadow model answered, mean alpha of those it also calls BUY minus those it does not (two-sided, block bootstrap).
+    The bias term b of H6 is identical for both groups and cancels in the difference, so it is not needed here."""
+    m = df.merge(ans, on=["day", "ticker"], how="inner")
+    m = m[(m["car"] - m["match"]).notna()].assign(a=lambda x: x["car"] - x["match"])
+    n, nb = len(m), int(m["i"].floordiv(pa.BLOCK).nunique()) if len(m) else 0
+    out = {"model": model, "n_answered": n, "n_blocks": nb, "n_model_buy": int((m.s_decision == "BUY").sum()), "n_model_not_buy": int((m.s_decision != "BUY").sum())}
+    if verdict and (n < H7_MIN_SIGNALS or nb < H7_MIN_BLOCKS):
+        out["verdict"] = f"insufficient data ({n} answered BUYs, {nb} blocks; need {H7_MIN_SIGNALS} and {H7_MIN_BLOCKS})"
+        return out
+    if out["n_model_buy"] == 0 or out["n_model_not_buy"] == 0:
+        out["verdict"] = "untestable: the model gave the same answer on every BUY"
+        return out
+    out["est"] = boot(m, lambda d: d.loc[d.s_decision == "BUY", "a"].mean() - d.loc[d.s_decision != "BUY", "a"].mean())
+    return out
+
+
+def analyse(df: pd.DataFrame, label: str, days: list = None, shadow: dict = None) -> dict:
     n, nb = len(df), df["i"].floordiv(pa.BLOCK).nunique()
     out = {"window": label, "n_signals": n, "n_blocks": int(nb),
            "first": df.day.min() if n else None, "last": df.day.max() if n else None}
     if n < MIN_SIGNALS or nb < MIN_BLOCKS:
         out["verdict"] = f"insufficient data ({n} signals, {nb} blocks; need {MIN_SIGNALS} and {MIN_BLOCKS})"
         if n < 30:
+            if shadow:      # still report how many shadow answers exist
+                for k, m in (("H7_sol_filter", "gpt-6-sol"), ("H7_luna_descriptive", "gpt-6-luna")):
+                    if m in shadow:
+                        out[k] = h7(df, shadow[m], m, verdict=True)
             return out
     gated = lambda d: d.loc[d.conf >= TAU, "car"].mean() - d["car"].mean()
     out["n_gated"] = int((df.conf >= TAU).sum())
@@ -110,7 +152,13 @@ def analyse(df: pd.DataFrame, label: str, days: list = None) -> dict:
             return a[a.notna()].mean() - b
         out["H6_biascorrected_alpha"] = boot(df, h6)
     fam = {k: out[k]["p"] for k in ("H1_gated_minus_all", "H2_spearman_conf_car", "H3_reversal_minus_universe", "H4_llm_minus_reversal", "H5_lowrsi30_minus_all", "H6_biascorrected_alpha") if k in out}
-    out["holm_adjusted_p"] = pa.holm(fam)                    # across the five pre-registered hypotheses
+    out["holm_adjusted_p"] = pa.holm(fam)                    # across H1 to H6; H7 is its own family (addendum 4)
+    if shadow:
+        # Sol is the pre-registered H7 test; Luna is descriptive (no verdict, no minimum), as fixed in addendum 4
+        if "gpt-6-sol" in shadow:
+            out["H7_sol_filter"] = h7(df, shadow["gpt-6-sol"], "gpt-6-sol")
+        if "gpt-6-luna" in shadow:
+            out["H7_luna_descriptive"] = h7(df, shadow["gpt-6-luna"], "gpt-6-luna", verdict=False)
     return out
 
 
@@ -125,6 +173,19 @@ def show(o: dict):
         if k in o:
             r, f = o[k], (lambda v: f"{v*100:+.2f}%") if pc else (lambda v: f"{v:+.3f}")
             print(f"   {lab:42} {f(r['est'])} [{f(r['lo'])}, {f(r['hi'])}]  MDE {f(r['mde']).lstrip('+')}  {'DETECTABLE' if r['detectable'] else 'not detectable'}")
+
+
+def show_h7(o: dict):
+    for k, tag in (("H7_sol_filter", "H7 (secondary) Sol BUY minus not-BUY, alpha"), ("H7_luna_descriptive", "H7 Luna (descriptive only)")):
+        r = o.get(k)
+        if not r:
+            continue
+        head = f"   {tag}: {r['n_answered']} answered BUYs, {r['n_blocks']} blocks, model BUY {r['n_model_buy']} / not {r['n_model_not_buy']}"
+        if "est" in r:
+            e = r["est"]
+            print(f"{head}: {e['est']*100:+.2f}% [{e['lo']*100:+.2f}, {e['hi']*100:+.2f}]")
+        else:
+            print(f"{head}: {r['verdict']}")
 
 
 def write_paper_tex(res: list):
@@ -186,12 +247,14 @@ def main():
         db = argv[1]
         df, days = build(db, pd.Timestamp.today().normalize() + pd.Timedelta(days=1))
         df = df[pd.to_datetime(df.day) >= FREEZE]
-        res = [analyse(df, "forward (on/after 2026-09-25, matured only)", days)] if len(df) else [
+        shadow = {m: shadow_answers(db, m) for m in ("gpt-6-sol", "gpt-6-luna")}
+        res = [analyse(df, "forward (on/after 2026-09-25, matured only)", days, shadow)] if len(df) else [
             {"window": "forward", "n_signals": 0, "n_blocks": 0, "verdict": f"insufficient data (0 signals, 0 blocks; need {MIN_SIGNALS} and {MIN_BLOCKS})"}]
     else:
         sys.exit(__doc__)
     for r in res:
         show(r)
+        show_h7(r)
     out_path = out_path or (Path(__file__).parent / "paper_results" / f"forward_{mode}.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(res, indent=1, default=float))

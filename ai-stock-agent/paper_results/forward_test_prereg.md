@@ -96,3 +96,5 @@ held 116 answers from GPT-6 Luna, all from 2026-09-25, none matured, none a BUY,
   (USD 0.40 per model) and stops for a scan after three consecutive errors, so on busy days some BUYs may be unanswered; the number answered is reported next to the result.
   (iii) The analysis code for H7 is not yet written; this addendum fixes its definition, and the code will be added and committed before the minimum sample is reached.
   (iv) Sol's access to the OpenAI account is unverified at the time of writing; if it never answers, H7 is reported as untestable rather than dropped.
+
+**Update, 2026-09-26 (same day, before any outcome):** the H7 analysis code is now written (`forward_test.py`: `shadow_answers`, `h7`; tests in `tests/test_h7.py`) and follows the definition above without change. Limit (iii) therefore no longer applies. Because the bias term b is identical for both groups, it cancels in the H7 difference, so the code computes the difference of alphas directly, which is the same quantity.
