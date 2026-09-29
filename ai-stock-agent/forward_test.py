@@ -193,7 +193,7 @@ def write_paper_tex(res: list):
     early, late, allv = res
     pc = lambda r: f"${r['est'] * 100:+.2f}\\;[{r['lo'] * 100:+.2f},{r['hi'] * 100:+.2f}]$"
     rho = lambda r: f"${r['est']:+.3f}\\;[{r['lo']:+.3f},{r['hi']:+.3f}]$"
-    spec = [("H1_gated_minus_all", "H1: conf.\\ $\\geq 0.85$ vs.\\ all", pc), ("H2_spearman_conf_car", "H2: rank corr.\\ conf.--CAR", rho),
+    spec = [("H1_gated_minus_all", "H1: conf.\\ $\\geq 0.85$ vs.\\ all", pc), ("H2_spearman_conf_car", "H2: rank corr.\\ of conf.\\ and CAR", rho),
             ("H3_reversal_minus_universe", "H3: low-RSI vs.\\ universe", pc), ("H4_llm_minus_reversal", "H4: LLM vs.\\ low-RSI", pc), ("H5_lowrsi30_minus_all", "H5: lowest-RSI third vs.\\ all (placebo alpha)", pc),
             ("H6_biascorrected_alpha", "H6: bias-corrected alpha (primary)", pc)]
     rows = [f"{lab} & {fmt(early[k])} & {fmt(late[k])} \\\\" for k, lab, fmt in spec]

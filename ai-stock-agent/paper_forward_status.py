@@ -18,7 +18,7 @@ HERE = Path(__file__).parent
 OUT = HERE.parent / "paper" / "results_forward_status.tex"
 BUCKET = "gs://project-0c776d86-067e-4f37-9ca-stock-scanner-data/forward_test.json"
 NEED_S, NEED_B = 300, 20
-HYP = [("H1_gated_minus_all", "H1: conf.\\ $\\geq 0.85$ vs.\\ all", "pct"), ("H2_spearman_conf_car", "H2: rank corr.\\ conf.--CAR", "rho"),
+HYP = [("H1_gated_minus_all", "H1: conf.\\ $\\geq 0.85$ vs.\\ all", "pct"), ("H2_spearman_conf_car", "H2: rank corr.\\ of conf.\\ and CAR", "rho"),
        ("H3_reversal_minus_universe", "H3: low-RSI vs.\\ universe", "pct"), ("H4_llm_minus_reversal", "H4: LLM vs.\\ low-RSI", "pct"),
        ("H5_lowrsi30_minus_all", "H5: lowest-RSI third vs.\\ all", "pct"), ("H6_biascorrected_alpha", "H6: bias-corrected alpha (primary)", "pct")]
 

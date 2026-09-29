@@ -36,7 +36,7 @@ def write_tex(out):
     f = lambda v: f"{v * 100:+.2f}"
     ci = lambda d: f"[{f(d['lo'])},{f(d['hi'])}]"
     names = {"universe": "Whole universe", "momentum": "Top 20-day momentum", "reversal": "Lowest daily RSI", "low_vol": "Lowest ATR\\%"}
-    rows = [f"LLM BUY signals & ${f(out['llm']['mean'])}$ & ${ci(out['llm'])}$ & --- & --- \\\\"]
+    rows = [f"LLM BUY signals & ${f(out['llm']['mean'])}$ & ${ci(out['llm'])}$ & N/A & N/A \\\\"]
     for k in ("universe", "momentum", "reversal", "low_vol"):
         r = out["rules"][k]
         rows.append(f"{names[k]} & ${f(r['car10']['mean'])}$ & ${ci(r['car10'])}$ & ${f(r['llm_minus_rule']['mean'])}$ & ${ci(r['llm_minus_rule'])}$ \\\\")
