@@ -47,7 +47,7 @@ echo "========================================="
 # with a hard daily cap. `SHADOW_MODEL= ./deploy/gcp/04_deploy_job.sh` (empty) turns it off;
 # SHADOW_MODEL=gpt-6-sol (~$37/month for every candidate; ~$6-8 with :buys) or gpt-6-astra (~$190/month) for stronger models.
 SHADOW_MODEL="${SHADOW_MODEL-gpt-6-luna,gpt-6-sol:buys}"   # ":buys" = only stocks production called BUY
-SHADOW_DAILY_BUDGET_USD="${SHADOW_DAILY_BUDGET_USD:-0.40}"   # per model
+SHADOW_DAILY_BUDGET_USD="${SHADOW_DAILY_BUDGET_USD:-0.60}"   # shared cap, applied per model (Sol was hitting $0.40 most afternoons; Luna never gets close)
 
 # The ^@^ prefix in --set-env-vars below switches gcloud's list separator to "@", because SHADOW_MODEL contains commas.
 deploy_job() {
